@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>TQBot2_description</name>
+  <version>1.0.0</version>
+  <description>TQBot2 robot description</description>
+  <maintainer email="user@example.com">TQBot</maintainer>
+  <license>Apache-2.0</license>
+</package>

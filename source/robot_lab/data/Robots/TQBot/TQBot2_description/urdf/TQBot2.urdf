@@ -664,16 +664,16 @@
 			</geometry>
 			<!-- <material name="orange"/> -->
 		</visual>
-		<!-- <collision>
-                <origin rpy="0 0 0" xyz="0 0 ${-thigh_length/2.0}" />
-                <geometry>
-                    <cylinder radius="0.02" length="${thigh_length}"/>
-                </geometry>      
-            </collision> -->
 		<collision>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<origin rpy="0 0 0" xyz="0 0 -0.1065"/>
 			<geometry>
-				<mesh filename="package://TQBot2_description/meshes/thigh_fr.stl" scale="1 1 1"/>
+				<cylinder radius="0.02" length="0.213"/>
+			</geometry>
+		</collision>
+		<collision>
+			<origin rpy="0 -0.08 0" xyz="-0.065 -0.05 -0.055"/>
+			<geometry>
+				<mesh filename="package://TQBot2_description/meshes/simple_thigh.STL" scale="0.001 0.001 0.001"/>
 			</geometry>
 		</collision>
 		<inertial>
@@ -883,16 +883,16 @@
 			</geometry>
 			<!-- <material name="orange"/> -->
 		</visual>
-		<!-- <collision>
-                <origin rpy="0 0 0" xyz="0 0 ${-thigh_length/2.0}" />
-                <geometry>
-                    <cylinder radius="0.02" length="${thigh_length}"/>
-                </geometry>      
-            </collision> -->
 		<collision>
-			<origin rpy="0 0 0" xyz="0 0 0"/>
+			<origin rpy="0 0 0" xyz="0 0 -0.1065"/>
 			<geometry>
-				<mesh filename="package://TQBot2_description/meshes/thigh_fl.stl" scale="1 1 1"/>
+				<cylinder radius="0.02" length="0.213"/>
+			</geometry>
+		</collision>
+		<collision>
+			<origin rpy="0.08 -0 -1.57" xyz="-0.065 0.05 -0.055"/>
+			<geometry>
+				<mesh filename="package://TQBot2_description/meshes/simple_thigh.STL" scale="0.001 0.001 0.001"/>
 			</geometry>
 		</collision>
 		<inertial>
@@ -1102,16 +1102,16 @@
 			</geometry>
 			<!-- <material name="orange"/> -->
 		</visual>
-		<!-- <collision>
-                <origin rpy="0 0 0" xyz="0 0 ${-thigh_length/2.0}" />
-                <geometry>
-                    <cylinder radius="0.02" length="${thigh_length}"/>
-                </geometry>      
-            </collision> -->
 		<collision>
-			<origin rpy="0 0 3.141592654" xyz="0 0 0"/>
+			<origin rpy="0 0 0" xyz="0 0 -0.1065"/>
 			<geometry>
-				<mesh filename="package://TQBot2_description/meshes/thigh_fl.stl" scale="1 1 1"/>
+				<cylinder radius="0.02" length="0.213"/>
+			</geometry>
+		</collision>
+		<collision>
+			<origin rpy="0.08 0 1.57" xyz="0.065 -0.05 -0.055"/>
+			<geometry>
+				<mesh filename="package://TQBot2_description/meshes/simple_thigh.STL" scale="0.001 0.001 0.001"/>
 			</geometry>
 		</collision>
 		<inertial>
@@ -1321,16 +1321,16 @@
 			</geometry>
 			<!-- <material name="orange"/> -->
 		</visual>
-		<!-- <collision>
-                <origin rpy="0 0 0" xyz="0 0 ${-thigh_length/2.0}" />
-                <geometry>
-                    <cylinder radius="0.02" length="${thigh_length}"/>
-                </geometry>      
-            </collision> -->
 		<collision>
-			<origin rpy="0 0 3.141592654" xyz="0 0 0"/>
+			<origin rpy="0 0 0" xyz="0 0 -0.1065"/>
 			<geometry>
-				<mesh filename="package://TQBot2_description/meshes/thigh_fr.stl" scale="1 1 1"/>
+				<cylinder radius="0.02" length="0.213"/>
+			</geometry>
+		</collision>
+		<collision>
+			<origin rpy="0.0 -0.08 3.1416" xyz="0.065 0.05 -0.055"/>
+			<geometry>
+				<mesh filename="package://TQBot2_description/meshes/simple_thigh.STL" scale="0.001 0.001 0.001"/>
 			</geometry>
 		</collision>
 		<inertial>

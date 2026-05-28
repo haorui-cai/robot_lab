@@ -20,6 +20,7 @@ TQBOT2_CFG = ArticulationCfg(
         replace_cylinders_with_capsules=False,
         asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/TQBot/TQBot2_description/urdf/TQBot2.urdf",
         activate_contact_sensors=True,
+        collider_type="convex_decomposition",
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             retain_accelerations=False,
@@ -49,10 +50,18 @@ TQBOT2_CFG = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.9,
     actuators={
-        "legs": ImplicitActuatorCfg(
-            joint_names_expr=[".*_joint"],
-            effort_limit_sim=35.55,
+        "hip_thigh": ImplicitActuatorCfg(
+            joint_names_expr=[".*hip_joint", ".*thigh_joint"],
+            effort_limit_sim=23.7,
             velocity_limit_sim=30.1,
+            stiffness=20.0,
+            damping=0.5,
+            friction=0.2,
+        ),
+        "calf": ImplicitActuatorCfg(
+            joint_names_expr=[".*calf_joint"],
+            effort_limit_sim=35.55,
+            velocity_limit_sim=20.06,
             stiffness=20.0,
             damping=0.5,
             friction=0.2,
