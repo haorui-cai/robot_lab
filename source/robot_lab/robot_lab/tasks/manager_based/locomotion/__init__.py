@@ -8,4 +8,5 @@
 
 """Locomotion environments for legged robots."""
 
+from .roll import *  # noqa
 from .velocity import *  # noqa
