@@ -39,7 +39,7 @@ NOISE_TERRAIN_CFG = TerrainGeneratorCfg(
 
 @configclass
 class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
-    base_link_name = "base"
+    base_link_name = "trunk"
     foot_link_name = ".*_calf"
     # fmt: off
     joint_names = [
@@ -54,11 +54,11 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         super().__post_init__()
 
         self.scene.robot = TQBOT2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
-        self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/base"
+        self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/trunk"
+        self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/trunk"
 
         # ------------------------------Actions------------------------------
-        self.actions.joint_pos.scale = {".*_hip_joint": 0.16, "^(?!.*_hip_joint).*": 0.26}
+        self.actions.joint_pos.scale = 1.0
         self.actions.joint_pos.joint_names = self.joint_names
 
         # ------------------------------Observations------------------------------
@@ -76,7 +76,7 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
 
         # ------------------------------Events------------------------------
-        self.events.randomize_reset_joints.params["position_range"] = (-0.12, 0.12)
+        self.events.randomize_reset_joints.params["position_range"] = (0.9, 1.0)
         self.events.randomize_reset_joints.params["velocity_range"] = (-1.8, 1.8)
         self.events.randomize_reset_base.params = {
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.2), "roll": (-3.14, 3.14), "pitch": (-3.14, 3.14), "yaw": (-3.14, 3.14)},
@@ -88,7 +88,8 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.events.randomize_apply_external_force_torque.params["asset_cfg"].body_names = [self.base_link_name]
 
         # ------------------------------Terrain------------------------------
-        self.scene.terrain.terrain_type = "generator"
+        self.scene.terrain.terrain_type = "plane"
+        # self.scene.terrain.terrain_type = "generator"  # disabled: noise terrain
         self.scene.terrain.terrain_generator = NOISE_TERRAIN_CFG
         self.scene.terrain.max_init_terrain_level = None
         self.scene.terrain.collision_group = -1
@@ -157,7 +158,7 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         # Contact bonus for body+legs during rolling
         self.rewards.roll_contact_bonus = RewTerm(
             func=roll_mdp.roll_contact_bonus, weight=0.5,
-            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "base"])},
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "trunk"])},
         )
 
         # ------------------------------Terminations------------------------------
@@ -174,7 +175,6 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
 
         # ------------------------------Simulation------------------------------
         self.episode_length_s = 10.0
-        self.sim.use_fabric = False
 
         if self.__class__.__name__ == "TQBot2RollRoughEnvCfg":
             self.disable_zero_weight_rewards()
