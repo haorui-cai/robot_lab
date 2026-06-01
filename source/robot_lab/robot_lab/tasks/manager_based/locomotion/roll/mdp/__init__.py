@@ -15,13 +15,15 @@ if TYPE_CHECKING:
 
 
 def roll_rate(
-    env: ManagerBasedRLEnv, target_roll_rate: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+    env: ManagerBasedRLEnv, std: float, command_name: str, roll_radius: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
 ) -> torch.Tensor:
-    """Reward for maintaining a target roll angular velocity around x-axis."""
+    """Reward for tracking commanded roll angular velocity around x-axis."""
     asset: RigidObject = env.scene[asset_cfg.name]
     roll_vel = asset.data.root_ang_vel_b[:, 0]
-    error = roll_vel - target_roll_rate
-    return torch.exp(-(error**2) / (target_roll_rate * 0.65) ** 2)
+    cmd_roll = env.command_manager.get_command(command_name)[:, 1] / roll_radius
+    error = torch.square(roll_vel - cmd_roll)
+    return torch.exp(-error / std ** 2)
 
 
 def roll_attitude(

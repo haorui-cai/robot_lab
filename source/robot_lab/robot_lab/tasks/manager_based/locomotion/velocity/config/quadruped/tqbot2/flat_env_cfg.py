@@ -1,6 +1,3 @@
-# Copyright (c) 2024-2026 Ziqi Fan
-# SPDX-License-Identifier: Apache-2.0
-
 from isaaclab.utils import configclass
 
 from .rough_env_cfg import TQBot2RoughEnvCfg

@@ -1,5 +1,3 @@
-# Copyright (c) 2024-2026 Ziqi Fan
-# SPDX-License-Identifier: Apache-2.0
 
 import isaaclab.sim as sim_utils
 import isaaclab.terrains as terrain_gen
@@ -64,16 +62,15 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         # ------------------------------Observations------------------------------
         self.observations.policy.joint_pos.params["asset_cfg"].joint_names = self.joint_names
         self.observations.policy.joint_vel.params["asset_cfg"].joint_names = self.joint_names
-        # Remove height_scan and velocity_commands (not needed for fixed roll rate training)
+        # Remove height_scan (not needed for flat rolling)
         self.observations.policy.height_scan = None
         self.observations.critic.height_scan = None
-        self.observations.policy.velocity_commands = None
-        self.observations.critic.velocity_commands = None
 
         # ------------------------------Commands------------------------------
+        # roll rate = lin_vel_y / roll_radius → ±7 rad/s corresponds to ±0.784 m/s
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
-        self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
-        self.commands.base_velocity.ranges.ang_vel_z = (0.0, 0.0)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.784, 0.784)
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.5, 1.5)
 
         # ------------------------------Events------------------------------
         self.events.randomize_reset_joints.params["position_range"] = (0.9, 1.0)
@@ -103,7 +100,7 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         # ------------------------------Rewards------------------------------
         # Root penalties
         self.rewards.lin_vel_z_l2.weight = -2.0
-        self.rewards.ang_vel_xy_l2.weight = -0.05
+        self.rewards.ang_vel_xy_l2.weight = 0
         self.rewards.base_height_l2 = None
 
         # Joint penalties
@@ -111,7 +108,7 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.rewards.joint_acc_l2.weight = -2.5e-7
         self.rewards.joint_pos_limits.weight = -5.0
         self.rewards.stand_still.weight = 0
-        self.rewards.joint_mirror.weight = -0.05
+        self.rewards.joint_mirror.weight = -0.8
         self.rewards.joint_mirror.params["mirror_joints"] = [
             ["FL_(hip|thigh|calf).*", "RL_(hip|thigh|calf).*"],
             ["FR_(hip|thigh|calf).*", "RR_(hip|thigh|calf).*"],
@@ -139,11 +136,19 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.rewards.feet_height.weight = 0
         self.rewards.feet_height_body.weight = 0
 
-        # Roll-specific rewards (target roll rate 7 rad/s)
-        self.rewards.roll_rate.params["target_roll_rate"] = 7.0
-        self.rewards.roll_rate.weight = 3.0
-        self.rewards.roll_attitude.params["target_roll"] = 7.0
-        self.rewards.roll_attitude.weight = -0.35
+        # Roll-specific rewards (command tracking)
+        # roll rate target = lin_vel_y / 0.112
+        self.rewards.roll_rate = RewTerm(
+            func=roll_mdp.roll_rate, weight=3.0,
+            params={"command_name": "base_velocity", "std": 0.5, "roll_radius": 0.112},
+        )
+        self.rewards.roll_attitude = None
+
+        # Yaw tracking
+        self.rewards.track_ang_vel_z_exp = RewTerm(
+            func=vmdp.track_ang_vel_z_exp, weight=1.0,
+            params={"command_name": "base_velocity", "std": 0.5},
+        )
 
         # Anti-jump
         self.rewards.base_height_above = RewTerm(
