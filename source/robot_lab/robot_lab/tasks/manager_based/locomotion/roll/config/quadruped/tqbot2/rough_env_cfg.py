@@ -56,7 +56,9 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/trunk"
 
         # ------------------------------Actions------------------------------
-        self.actions.joint_pos.scale = 1.0
+        self.actions.joint_pos.use_default_offset = False
+        self.actions.joint_pos.scale = {".*_hip_joint": 1.58, ".*_thigh_joint": 2.3, ".*_calf_joint": 0.0}
+        self.actions.joint_pos.offset = {".*R_hip_joint": 0.644, ".*L_hip_joint": -0.644, ".*_thigh_joint": 1.475, ".*_calf_joint": -2.98}
         self.actions.joint_pos.joint_names = self.joint_names
 
         # ------------------------------Observations------------------------------
@@ -71,6 +73,8 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.commands.base_velocity.ranges.lin_vel_x = (0.0, 0.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.784, 0.784)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.5, 1.5)
+        self.commands.base_velocity.heading_command = False
+        self.commands.base_velocity.debug_vis = False
 
         # ------------------------------Events------------------------------
         self.events.randomize_reset_joints.params["position_range"] = (0.9, 1.0)
@@ -108,7 +112,7 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.rewards.joint_acc_l2.weight = -2.5e-7
         self.rewards.joint_pos_limits.weight = -5.0
         self.rewards.stand_still.weight = 0
-        self.rewards.joint_mirror.weight = -0.8
+        self.rewards.joint_mirror.weight = -1.5
         self.rewards.joint_mirror.params["mirror_joints"] = [
             ["FL_(hip|thigh|calf).*", "RL_(hip|thigh|calf).*"],
             ["FR_(hip|thigh|calf).*", "RR_(hip|thigh|calf).*"],
@@ -123,9 +127,8 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         self.rewards.contact_forces.params["sensor_cfg"].body_names = [self.foot_link_name]
         self.rewards.upward.weight = 0
 
-        # Disable velocity-tracking and feet rewards (not needed for rolling)
+        # Disable linear velocity tracking and feet rewards (not needed for rolling)
         self.rewards.track_lin_vel_xy_exp = None
-        self.rewards.track_ang_vel_z_exp = None
         self.rewards.feet_air_time.weight = 0
         self.rewards.feet_air_time_variance.weight = 0
         self.rewards.feet_gait.weight = 0
@@ -139,14 +142,31 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         # Roll-specific rewards (command tracking)
         # roll rate target = lin_vel_y / 0.112
         self.rewards.roll_rate = RewTerm(
-            func=roll_mdp.roll_rate, weight=3.0,
+            func=roll_mdp.roll_rate, weight=5.0,
             params={"command_name": "base_velocity", "std": 0.5, "roll_radius": 0.112},
         )
         self.rewards.roll_attitude = None
 
-        # Yaw tracking
+        # Thigh-ground drive reward: reward strong thigh-ground force, max 0.1s per contact
+        self.rewards.roll_thigh_drive = RewTerm(
+            func=roll_mdp.roll_thigh_drive, weight=2.0,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_thigh"]), "max_duration": 0.1},
+        )
+
+        # Hip asymmetry bonus: reward left-right hip difference when thighs are pressing
+        self.rewards.roll_hip_asymmetry = RewTerm(
+            func=roll_mdp.roll_hip_asymmetry, weight=1.0,
+            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_thigh"])},
+        )
+
+        # Curled posture reward: keep legs tucked for efficient rolling
+        self.rewards.roll_curled_posture = RewTerm(
+            func=roll_mdp.roll_curled_posture, weight=1.0,
+        )
+
+        # Yaw tracking (no gravity decay for rolling)
         self.rewards.track_ang_vel_z_exp = RewTerm(
-            func=vmdp.track_ang_vel_z_exp, weight=1.0,
+            func=roll_mdp.roll_yaw_rate, weight=1.0,
             params={"command_name": "base_velocity", "std": 0.5},
         )
 
@@ -160,11 +180,11 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
             params={"vel_weight": 2.0, "acc_weight": 5.0e-3},
         )
 
-        # Contact bonus for body+legs during rolling
-        self.rewards.roll_contact_bonus = RewTerm(
-            func=roll_mdp.roll_contact_bonus, weight=0.5,
-            params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "trunk"])},
-        )
+        # Contact bonus for body+legs during rolling (disabled: encourages lying still)
+        # self.rewards.roll_contact_bonus = RewTerm(
+        #     func=roll_mdp.roll_contact_bonus, weight=0.5,
+        #     params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "trunk"])},
+        # )
 
         # ------------------------------Terminations------------------------------
         self.terminations.terrain_out_of_bounds = DoneTerm(
