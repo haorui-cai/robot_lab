@@ -14,6 +14,12 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
 
 
+def recovery_alpha(env: ManagerBasedEnv, action_name: str = "joint_pos") -> torch.Tensor:
+    """Return the walking-to-recovery action blend factor."""
+    action_term = env.action_manager.get_term(action_name)
+    return action_term.recovery_alpha.unsqueeze(-1)
+
+
 def joint_pos_rel_without_wheel(
     env: ManagerBasedEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),

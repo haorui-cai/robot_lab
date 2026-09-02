@@ -685,3 +685,10 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
+
+
+def joint_target_rate_l2(env: ManagerBasedRLEnv, action_name: str = "joint_pos") -> torch.Tensor:
+    """Penalize changes in applied joint-position targets instead of raw actions."""
+    action_term = env.action_manager.get_term(action_name)
+    target_delta = action_term.processed_actions - action_term.previous_joint_targets
+    return torch.sum(torch.square(target_delta), dim=1)

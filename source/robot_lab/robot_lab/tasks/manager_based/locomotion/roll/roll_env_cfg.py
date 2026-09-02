@@ -67,7 +67,7 @@ class RollSceneCfg(InteractiveSceneCfg):
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=5, track_air_time=True)
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
         spawn=sim_utils.DomeLightCfg(
@@ -220,12 +220,11 @@ class RollRewardsCfg:
     upward = RewTerm(func=vmdp.upward, weight=0.0)
 
     # Roll-specific rewards
-    roll_progress = RewTerm(func=roll_mdp.roll_progress, weight=0.0, params={"target_speed": 0.9})
-    roll_rate = RewTerm(func=roll_mdp.roll_rate, weight=0.0, params={"target_roll_rate": 4.5})
-    roll_attitude = RewTerm(func=roll_mdp.roll_attitude, weight=0.0, params={"target_roll": 4.5})
+    track_roll_vel_x = RewTerm(func=roll_mdp.track_roll_vel_x, weight=0.0, params={"command_name": "base_velocity", "std": 0.5, "roll_radius": 0.112})
+    # roll_attitude = RewTerm(func=roll_mdp.roll_attitude, weight=0.0, params={"target_roll": 4.5})  # 已删除
     base_height_above = RewTerm(func=roll_mdp.base_height_above_l1, weight=0.0, params={"threshold": 0.18, "asset_cfg": SceneEntityCfg("robot"), "sensor_cfg": SceneEntityCfg("height_scanner_base")})
     roll_anti_jump = RewTerm(func=roll_mdp.roll_anti_jump, weight=0.0, params={"vel_weight": 2.0, "acc_weight": 5.0e-3})
-    roll_contact_bonus = RewTerm(func=roll_mdp.roll_contact_bonus, weight=0.0, params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "base"])})
+    # roll_contact_bonus = RewTerm(func=roll_mdp.roll_contact_bonus, weight=0.0, params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", "base"])})  # 已删除
 
 
 @configclass

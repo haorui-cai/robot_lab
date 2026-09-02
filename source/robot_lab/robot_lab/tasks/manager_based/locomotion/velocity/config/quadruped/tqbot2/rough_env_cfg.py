@@ -1,3 +1,4 @@
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
@@ -35,6 +36,14 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
         self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
 
+        # TQBot2 has shorter lower legs than Go1/Go2. Scale the vertical
+        # dimensions of the three step-like terrains while keeping their
+        # horizontal geometry and the other terrain types unchanged.
+        terrain_cfg = self.scene.terrain.terrain_generator
+        terrain_cfg.sub_terrains["pyramid_stairs"].step_height_range = (0.035, 0.161)
+        terrain_cfg.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.035, 0.161)
+        terrain_cfg.sub_terrains["boxes"].grid_height_range = (0.035, 0.14)
+
         # ------------------------------Observations------------------------------
         self.observations.policy.base_lin_vel.scale = 2.0
         self.observations.policy.base_ang_vel.scale = 0.25
@@ -44,12 +53,28 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.observations.policy.height_scan = None
         self.observations.policy.joint_pos.params["asset_cfg"].joint_names = self.joint_names
         self.observations.policy.joint_vel.params["asset_cfg"].joint_names = self.joint_names
+        self.observations.policy.recovery_alpha = ObsTerm(
+            func=mdp.recovery_alpha, params={"action_name": "joint_pos"}
+        )
+        self.observations.critic.recovery_alpha = ObsTerm(
+            func=mdp.recovery_alpha, params={"action_name": "joint_pos"}
+        )
 
         # ------------------------------Actions------------------------------
-        # reduce action scale
-        self.actions.joint_pos.scale = {".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25}
-        self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
-        self.actions.joint_pos.joint_names = self.joint_names
+        # Use compact walking targets while upright, then smoothly expose all
+        # leg joints to their 90% soft limits as the robot falls.
+        self.actions.joint_pos = mdp.RecoveryJointPositionActionCfg(
+            asset_name="robot",
+            joint_names=self.joint_names,
+            scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
+            use_default_offset=True,
+            clip=None,
+            preserve_order=True,
+            upright_gravity_z=-0.9,
+            fallen_gravity_z=-0.4,
+            activation_rate=5.0,
+            deactivation_rate=2.0,
+        )
 
         # ------------------------------Events------------------------------
         self.events.randomize_reset_base.params = {
@@ -108,6 +133,8 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Action penalties
         self.rewards.action_rate_l2.weight = -0.01
+        self.rewards.action_rate_l2.func = mdp.joint_target_rate_l2
+        self.rewards.action_rate_l2.params = {"action_name": "joint_pos"}
 
         # Contact sensor
         self.rewards.undesired_contacts.weight = -1.0
@@ -142,7 +169,7 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_gait.weight = 0.5
         self.rewards.feet_gait.params["synced_feet_pair_names"] = (("FL_calf", "RR_calf"), ("FR_calf", "RL_calf"))
-        self.rewards.upward.weight = 1.0
+        self.rewards.upward.weight = 0.5
 
         # If the weight of rewards is 0, set rewards to None
         if self.__class__.__name__ == "TQBot2RoughEnvCfg":
@@ -154,3 +181,8 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # ------------------------------Curriculums------------------------------
         self.curriculum.command_levels_lin_vel = None
         self.curriculum.command_levels_ang_vel = None
+
+        # ------------------------------Commands------------------------------
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.5)
+        self.commands.base_velocity.ranges.lin_vel_y = (-0.5, 0.5)
+        self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)

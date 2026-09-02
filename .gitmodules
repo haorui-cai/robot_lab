@@ -1,0 +1,3 @@
+[submodule "docs/rl-notes"]
+	path = docs/rl-notes
+	url = https://github.com/haorui-cai/Docs_of_RL
