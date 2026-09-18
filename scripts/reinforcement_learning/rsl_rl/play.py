@@ -23,6 +23,12 @@ parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
+    "--max_steps", type=int, default=None, help="Stop after this many inference steps (default: unlimited)."
+)
+parser.add_argument(
+    "--reset_pause", type=float, default=0.0, help="Hold the rendered reset pose before acting (seconds)."
+)
+parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
 )
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
@@ -133,12 +139,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # disable randomization for play
     env_cfg.observations.policy.enable_corruption = False
     # remove random pushing
-    env_cfg.events.randomize_apply_external_force_torque = None
-    env_cfg.events.push_robot = None
-    env_cfg.curriculum.command_levels_lin_vel = None
-    env_cfg.curriculum.command_levels_ang_vel = None
+    for name in ("randomize_apply_external_force_torque", "push_robot"):
+        if hasattr(env_cfg.events, name):
+            setattr(env_cfg.events, name, None)
+    for name in ("command_levels_lin_vel", "command_levels_ang_vel"):
+        if hasattr(env_cfg.curriculum, name):
+            setattr(env_cfg.curriculum, name, None)
 
     if args_cli.keyboard:
+        if not hasattr(env_cfg.commands, "base_velocity"):
+            raise ValueError("Keyboard velocity control requires a task with a base_velocity command.")
         env_cfg.scene.num_envs = 1
         env_cfg.terminations.time_out = None
         env_cfg.commands.base_velocity.debug_vis = False
@@ -236,6 +246,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     # reset environment
     obs = env.get_observations()
+
+    def show_reset_pose():
+        if args_cli.reset_pause > 0 and env.unwrapped.sim.has_gui():
+            until = time.monotonic() + args_cli.reset_pause
+            while time.monotonic() < until and simulation_app.is_running():
+                env.unwrapped.sim.render()
+                time.sleep(0.016)
+
+    show_reset_pose()
     timestep = 0
     # simulate environment
     while simulation_app.is_running():
@@ -251,11 +270,15 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                 policy.reset(dones)
             else:
                 policy_nn.reset(dones)
+        if args_cli.reset_pause > 0 and dones.any():
+            show_reset_pose()
+        timestep += 1
         if args_cli.video:
-            timestep += 1
             # Exit the play loop after recording one video
             if timestep == args_cli.video_length:
                 break
+        if args_cli.max_steps is not None and timestep >= args_cli.max_steps:
+            break
 
         if args_cli.keyboard:
             camera_follow(env)

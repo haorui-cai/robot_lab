@@ -18,7 +18,9 @@ TQBOT2_CFG = ArticulationCfg(
         fix_base=False,
         merge_fixed_joints=True,
         replace_cylinders_with_capsules=False,
-        asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/TQBot/TQBot2_description/urdf/TQBot2.urdf",
+        # Generated from the ROS description by scripts/tools/sync_tqbot2_description.py.
+        # Only the virtual base frame is removed; trunk-relative physics is unchanged.
+        asset_path=f"{ISAACLAB_ASSETS_DATA_DIR}/Robots/TQBot/TQBot2_description/urdf/TQBot2_isaac.urdf",
         activate_contact_sensors=True,
         collider_type="convex_hull",
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
