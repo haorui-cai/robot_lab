@@ -5,10 +5,17 @@ term.  Recovery and rolling remain separate skills so that their specialised
 action mappings do not alter the walking policy's MDP.
 """
 
-from isaaclab.managers import SceneEntityCfg
+import math
+
+from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg
 from isaaclab.utils import configclass
 
 from robot_lab.assets.tqbot import TQBOT2_CFG
+from robot_lab.assets.tqbot_collision import spawn_tqbot2_walk_with_leg_collisions
+from robot_lab.tasks.manager_based.locomotion.velocity.mdp.gentle_recovery import (
+    RecoveryTorqueChange, recovery_joint_effort, recovery_joint_velocity,
+    walking_energy_efficiency, walking_joule_proxy,
+)
 from robot_lab.tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
     LocomotionVelocityRoughEnvCfg,
 )
@@ -32,8 +39,13 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Scene and robot-specific link names.
         self.scene.robot = TQBOT2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot.spawn.articulation_props.enabled_self_collisions = True
+        self.scene.robot.spawn.func = spawn_tqbot2_walk_with_leg_collisions
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
         self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
+        # Nominal slope is rise/run. Retain the level curriculum and raise its ceiling to 30 degrees.
+        for name in ("hf_pyramid_slope", "hf_pyramid_slope_inv"):
+            self.scene.terrain.terrain_generator.sub_terrains[name].slope_range = (0.0, math.tan(math.radians(30.0)))
 
         # Match the existing TQBot2 velocity-tracking observation interface.
         self.observations.policy.base_lin_vel.scale = 2.0
@@ -47,10 +59,20 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Keep one continuous, small-amplitude action mapping in every state.
         self.actions.joint_pos.scale = {".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25}
-        self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
+        # JointPositionAction clips processed joint targets, preserving raw-action observations.
+        self.actions.joint_pos.clip = {
+            ".*_thigh_joint": (0.6, 3.2),
+            "^(?!.*_thigh_joint).*": (-100.0, 100.0),
+        }
         self.actions.joint_pos.joint_names = self.joint_names
 
         # Domain randomization, with the TQBot2 trunk selected explicitly.
+        # Apply the foot material override after the inherited whole-body event.
+        self.events.randomize_foot_material = self.events.randomize_rigid_body_material.copy()
+        foot_material = self.events.randomize_foot_material.params
+        foot_material["asset_cfg"].body_names = [self.foot_link_name]
+        foot_material["static_friction_range"] = (0.15, 1.0)
+        foot_material["dynamic_friction_range"] = (0.15, 0.8)
         self.events.randomize_reset_base.params = {
             "pose_range": {
                 "x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.2),
@@ -121,9 +143,34 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_height_body.weight = -5.0
         self.rewards.feet_height_body.params["target_height"] = -0.2
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
-        self.rewards.feet_gait.weight = 0.5
+        self.rewards.feet_gait.weight = 0.25
         self.rewards.feet_gait.params["synced_feet_pair_names"] = (("FL_calf", "RR_calf"), ("FR_calf", "RL_calf"))
         self.rewards.upward.weight = 1.0
+
+        # Normalized costs fade out once upright and clear of trunk-ground contact.
+        recovery_params = {
+            "asset_cfg": SceneEntityCfg("robot", joint_names=self.joint_names),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.base_link_name]),
+        }
+        self.rewards.recovery_effort = RewTerm(
+            func=recovery_joint_effort, weight=-0.5, params=recovery_params.copy(),
+        )
+        self.rewards.recovery_torque_change = RewTerm(
+            func=RecoveryTorqueChange, weight=-0.25,
+            params={**recovery_params, "reference_dt": 0.02},
+        )
+        self.rewards.recovery_joint_velocity = RewTerm(
+            func=recovery_joint_velocity, weight=-0.25,
+            params={**recovery_params, "reference_speed": 8.0},
+        )
+        self.rewards.walking_energy_efficiency = RewTerm(
+            func=walking_energy_efficiency, weight=0.5,
+            params={**recovery_params, "command_name": "base_velocity", "energy_per_metre": 500.0,
+                    "speed_floor": 0.1, "yaw_radius": 0.25, "tracking_std": 0.5},
+        )
+        self.rewards.walking_joule_proxy = RewTerm(
+            func=walking_joule_proxy, weight=-0.15, params=recovery_params.copy(),
+        )
 
         self.disable_zero_weight_rewards()
         self.terminations.illegal_contact = None
