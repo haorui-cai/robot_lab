@@ -7,12 +7,16 @@ action mappings do not alter the walking policy's MDP.
 
 import math
 
-from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg
+from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg, TerminationTermCfg as DoneTerm
+from isaaclab.terrains import MeshPlaneTerrainCfg
 from isaaclab.utils import configclass
 
 from robot_lab.assets.tqbot import TQBOT2_CFG
 from robot_lab.assets.tqbot_collision import spawn_tqbot2_walk_with_leg_collisions
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.foot_ground import FootGroundMotion
+from robot_lab.tasks.manager_based.locomotion.velocity.mdp.high_friction_flat import (
+    HighFrictionFlatMaterial, high_friction_flat_exit,
+)
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.gentle_recovery import (
     RecoveryTorqueChange, recovery_joint_effort, recovery_joint_velocity,
     walking_energy_efficiency, walking_joule_proxy,
@@ -47,6 +51,11 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         # Nominal slope is rise/run. Retain the level curriculum and raise its ceiling to 30 degrees.
         for name in ("hf_pyramid_slope", "hf_pyramid_slope_inv"):
             self.scene.terrain.terrain_generator.sub_terrains[name].slope_range = (0.0, math.tan(math.radians(30.0)))
+        terrains = self.scene.terrain.terrain_generator.sub_terrains
+        total = sum(t.proportion for t in terrains.values())
+        for terrain in terrains.values():
+            terrain.proportion = 0.9 * terrain.proportion / total
+        terrains["high_friction_flat"] = MeshPlaneTerrainCfg(proportion=0.1)
 
         # Match the existing TQBot2 velocity-tracking observation interface.
         self.observations.policy.base_lin_vel.scale = 2.0
@@ -74,6 +83,14 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         foot_material["asset_cfg"].body_names = [self.foot_link_name]
         foot_material["static_friction_range"] = (0.15, 1.0)
         foot_material["dynamic_friction_range"] = (0.15, 0.8)
+        # Last startup material event: fixed 2.5 overrides the usual foot ranges
+        # only on the dedicated flat columns. Ground remains 1.0 (multiply).
+        self.events.high_friction_flat_material = self.events.randomize_foot_material.copy()
+        self.events.high_friction_flat_material.func = HighFrictionFlatMaterial
+        self.events.high_friction_flat_material.params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+            "terrain_name": "high_friction_flat", "friction": 2.5,
+        }
         self.events.randomize_reset_base.params = {
             "pose_range": {
                 "x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.2),
@@ -184,5 +201,6 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         self.disable_zero_weight_rewards()
         self.terminations.illegal_contact = None
+        self.terminations.high_friction_flat_exit = DoneTerm(func=high_friction_flat_exit)
         self.curriculum.command_levels_lin_vel = None
         self.curriculum.command_levels_ang_vel = None
