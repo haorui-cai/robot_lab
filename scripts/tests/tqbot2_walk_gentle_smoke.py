@@ -10,6 +10,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--checkpoint", type=Path, required=True)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument("--rough", action="store_true", help="Also exercise terrain raycasts on generated terrain")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args).app
@@ -30,12 +31,18 @@ def main():
               for n in ("hf_pyramid_slope", "hf_pyramid_slope_inv")}
     assert all(abs(r[1] - math.tan(math.radians(30))) < 1e-12 for r in slopes.values())
     cfg.scene.num_envs = 16
+    cfg.sim.device = args.device
     cfg.seed = 42
-    cfg.scene.terrain.terrain_type = "plane"
-    cfg.scene.terrain.terrain_generator = None
-    cfg.scene.height_scanner = None
-    cfg.scene.height_scanner_base = None
-    cfg.observations.critic.height_scan = None
+    if args.rough:
+        cfg.scene.terrain.terrain_generator.num_rows = 2
+        cfg.scene.terrain.terrain_generator.num_cols = 2
+        cfg.scene.terrain.max_init_terrain_level = 1
+    else:
+        cfg.scene.terrain.terrain_type = "plane"
+        cfg.scene.terrain.terrain_generator = None
+        cfg.scene.height_scanner = None
+        cfg.scene.height_scanner_base = None
+        cfg.observations.critic.height_scan = None
     cfg.curriculum.terrain_levels = None
     cfg.observations.policy.enable_corruption = False
     cfg.events.push_robot = None
@@ -86,6 +93,8 @@ def main():
         command.vel_command_b[:] = 0.
         command.is_heading_env[:] = False
         command.is_standing_env[:] = True
+        command.vel_command_b[:8, 0] = .5
+        command.is_standing_env[:8] = False
         env.scene.write_data_to_sim()
         env.sim.forward()
         env.scene.update(env.physics_dt)
@@ -101,6 +110,8 @@ def main():
                 peaks["torque_nm"] = max(peaks["torque_nm"], robot.data.applied_torque.abs().max().item())
                 peaks["joint_speed_rad_s"] = max(peaks["joint_speed_rad_s"], robot.data.joint_vel.abs().max().item())
         history = env.reward_manager.get_term_cfg("recovery_torque_change").func.history
+        assert "feet_height_body" not in env.reward_manager.active_terms
+        assert "feet_swing_clearance" in env.reward_manager.active_terms
         subset = torch.tensor([1, 7], device=env.device)
         env._reset_idx(subset)
         assert not history.valid[subset].any()
@@ -109,6 +120,8 @@ def main():
         report = dict(checkpoint=str(args.checkpoint.resolve()), device=env.device, num_envs=16,
                       physics_thigh_limits=[.6, 3.2], target_clipping_verified=True,
                       reward_history_partial_reset_verified=True, steps=300, nominal_slope_ranges=slopes,
+                      terrain="generated" if args.rough else "plane", foot_clearance_m=.03,
+                      ground_foot_motion_terms_verified=True,
                       peaks=peaks, upright_fraction_at_end=float((-robot.data.projected_gravity_b[:, 2] > .866).float().mean()),
                       note="Integration smoke test; energy reduction and 30-degree climbing performance not established")
         args.output.parent.mkdir(parents=True, exist_ok=True)

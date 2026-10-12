@@ -12,6 +12,7 @@ from isaaclab.utils import configclass
 
 from robot_lab.assets.tqbot import TQBOT2_CFG
 from robot_lab.assets.tqbot_collision import spawn_tqbot2_walk_with_leg_collisions
+from robot_lab.tasks.manager_based.locomotion.velocity.mdp.foot_ground import FootGroundMotion
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.gentle_recovery import (
     RecoveryTorqueChange, recovery_joint_effort, recovery_joint_velocity,
     walking_energy_efficiency, walking_joule_proxy,
@@ -134,15 +135,24 @@ class TQBot2StandardWalkRoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.feet_contact_without_cmd.params["sensor_cfg"].body_names = [self.foot_link_name]
         self.rewards.feet_stumble.weight = 0
         self.rewards.feet_stumble.params["sensor_cfg"].body_names = [self.foot_link_name]
-        self.rewards.feet_slide.weight = -0.1
-        self.rewards.feet_slide.params["sensor_cfg"].body_names = [self.foot_link_name]
-        self.rewards.feet_slide.params["asset_cfg"].body_names = [self.foot_link_name]
+        foot_motion_params = {
+            "asset_cfg": SceneEntityCfg("robot", body_names=[self.foot_link_name]),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[self.foot_link_name]),
+            "command_name": "base_velocity", "foot_offset": (0.0, 0.0, -0.153),
+            "foot_radius": 0.012, "target_clearance": 0.03,
+        }
+        self.rewards.feet_slide = RewTerm(
+            func=FootGroundMotion, weight=-0.5, params={**foot_motion_params, "mode": "slip"},
+        )
         self.rewards.feet_height.weight = 0
         self.rewards.feet_height.params["target_height"] = 0.05
         self.rewards.feet_height.params["asset_cfg"].body_names = [self.foot_link_name]
-        self.rewards.feet_height_body.weight = -5.0
+        self.rewards.feet_height_body.weight = 0
         self.rewards.feet_height_body.params["target_height"] = -0.2
         self.rewards.feet_height_body.params["asset_cfg"].body_names = [self.foot_link_name]
+        self.rewards.feet_swing_clearance = RewTerm(
+            func=FootGroundMotion, weight=-0.5, params={**foot_motion_params, "mode": "clearance"},
+        )
         self.rewards.feet_gait.weight = 0.25
         self.rewards.feet_gait.params["synced_feet_pair_names"] = (("FL_calf", "RR_calf"), ("FR_calf", "RL_calf"))
         self.rewards.upward.weight = 1.0
