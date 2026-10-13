@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TQBot2 · 中文训练看板</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header class="topbar"><div class="brand"><span class="brandmark">▥</span><div><strong id="brandTitle">训练看板 / Training Board</strong><small id="brandSubtitle">TQBot2 · TensorBoard</small></div></div><div class="topright"><span id="liveState" class="live">正在读取 / Loading</span><span id="updated"></span><button id="refresh">立即刷新 / Refresh</button></div></header>
+<div class="layout"><aside><div class="sidehead"><h2 id="runsTitle">训练记录</h2><span id="runCount"></span></div><input id="runSearch" class="search" placeholder="搜索训练名称或日期" aria-label="搜索训练记录"><div id="runList"></div><div class="sidefoot" id="sidefoot">勾选记录即可对比，最多 8 组。<br>实线颜色与记录标记一致。<br><span>页面仅查看日志。</span></div></aside>
+<main><div class="pagehead"><div><p class="eyebrow" id="eyebrow">实时训练监测</p><h1 id="pageTitle">训练总览</h1><p id="selectionSummary">正在读取训练记录…</p></div><a id="export" class="export-link" href="#" download>导出当前数据 / Export visible data</a></div>
+<div id="runSummary" class="run-summary"></div><nav id="tabs" aria-label="指标分类"></nav>
+<div class="toolbar"><input id="metricSearch" class="search" placeholder="搜索指标：课程、力矩、滑移…" aria-label="搜索指标"><label><span id="smoothingLabel">平滑</span><select id="smoothing"><option value="0">关闭</option><option value="20">20 轮</option><option value="50">50 轮</option><option value="100" selected>100 轮</option><option value="200">200 轮</option></select></label><label><span id="axisLabel">横轴</span><select id="axis"><option value="iteration">迭代编号</option><option value="relative">相对起点</option><option value="time">训练时长</option></select></label><button id="recent">最近 500 轮</button><button id="resetZoom">显示全部</button><label class="check"><input type="checkbox" id="autoRefresh" checked><span id="autoLabel">自动刷新</span></label></div>
+<div id="notice" class="notice"></div><div class="chart-help" id="chartHelp">在曲线上悬停可查看数值；拖选区间可放大所有图，双击恢复全范围。浅线为原始数据，深线为平滑数据。</div>
+<div id="error" role="alert"></div><div id="loading" class="loading">正在加载日志曲线…</div><div id="charts" class="charts"></div><div id="empty" class="empty" hidden>未找到匹配指标。可用中文名称或原始标签搜索。</div>
+<footer id="footer">各记录保留自己的迭代编号；恢复训练从检查点编号继续。课程等级为全部环境均值，日志未记录坡面单独等级。训练曲线不等于固定工况性能测试。</footer></main></div>
+<script src="/app.js"></script></body></html>
