@@ -135,6 +135,12 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         env_cfg.scene.terrain.terrain_generator.num_rows = 5
         env_cfg.scene.terrain.terrain_generator.num_cols = 5
         env_cfg.scene.terrain.terrain_generator.curriculum = False
+    if args_cli.task.split(":")[-1] == "RobotLab-Isaac-Velocity-Rough-TQBot2-FreeGaitScratch-v0":
+        from robot_lab.tasks.manager_based.locomotion.velocity.config.quadruped.tqbot2.free_gait_terrain import validate_free_gait_terrain
+        validate_free_gait_terrain(env_cfg.scene.terrain.terrain_generator)
+        # Random play tiles do not follow the training curriculum's deterministic columns.
+        env_cfg.curriculum.terrain_levels = None
+        env_cfg.curriculum.terrain_breakdown = None
 
     # disable randomization for play
     env_cfg.observations.policy.enable_corruption = False

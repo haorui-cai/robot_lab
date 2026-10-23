@@ -15,7 +15,7 @@ parser.add_argument('--seconds', type=float, default=8.)
 parser.add_argument('--speed', type=float, default=.5)
 parser.add_argument('--num_envs', type=int, default=24)
 parser.add_argument('--seed', type=int, default=42)
-parser.add_argument('--terrain', choices=('mixed', 'slope'), default='mixed')
+parser.add_argument('--terrain', choices=('mixed', 'flat', 'slope', 'slope-inv'), default='mixed')
 parser.add_argument('--slope-deg', type=float, default=5.)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -34,10 +34,12 @@ import gymnasium as gym
 from rsl_rl.models import MLPModel
 from isaaclab.utils.math import quat_apply_inverse
 from isaaclab.utils.io import dump_yaml
+from isaaclab.terrains import MeshPlaneTerrainCfg
 import robot_lab.tasks
 from robot_lab.tasks.manager_based.locomotion.velocity.config.quadruped.tqbot2.free_gait_env_cfg import TQBot2FreeGaitEnvCfg
 from robot_lab.tasks.manager_based.locomotion.velocity.config.quadruped.tqbot2.reward_v4_env_cfg import TQBot2RewardV4EnvCfg
 from robot_lab.tasks.manager_based.locomotion.velocity.mdp.foot_ground import terrain_surface_at_feet
+from robot_lab.tasks.manager_based.locomotion.velocity.config.quadruped.tqbot2.free_gait_terrain import validate_free_gait_terrain
 
 
 def main():
@@ -48,14 +50,20 @@ def main():
     generator.seed = args.seed
     generator.curriculum = False
     cfg.scene.terrain.max_init_terrain_level = 0
-    if args.terrain == 'slope':
-        terrain = generator.sub_terrains['hf_pyramid_slope'].copy()
+    if args.terrain in ('slope', 'slope-inv'):
+        name = 'hf_pyramid_slope_inv' if args.terrain == 'slope-inv' else 'hf_pyramid_slope'
+        terrain = generator.sub_terrains[name].copy()
         terrain.slope_range = (math.tan(math.radians(args.slope_deg)),)*2
         terrain.proportion = 1.
-        generator.sub_terrains = {'hf_pyramid_slope': terrain}
+        generator.sub_terrains = {name: terrain}
+        generator.num_rows, generator.num_cols = 1, 1
+    elif args.terrain == 'flat':
+        generator.sub_terrains = {'flat': MeshPlaneTerrainCfg(proportion=1.)}
         generator.num_rows, generator.num_cols = 1, 1
     else:
-        generator.num_rows, generator.num_cols = 5, 6
+        generator.num_rows, generator.num_cols = (5, 5) if args.variant == 'free' else (5, 6)
+    if args.variant == 'free':
+        validate_free_gait_terrain(generator, allow_subset=True)
     cfg.curriculum.terrain_levels = cfg.curriculum.terrain_breakdown = None
     for name in ('command_levels_lin_vel', 'command_levels_ang_vel'):
         if hasattr(cfg.curriculum, name):
@@ -136,6 +144,8 @@ def main():
         dump_yaml(str(args.output/'evaluation_env.yaml'), cfg)
         metadata = {**vars(args), 'checkpoint_sha256':hashlib.sha256(args.checkpoint.read_bytes()).hexdigest(),
                     'foot_names':names, 'physics_dt':env.physics_dt, 'control_dt':env.step_dt,
+                    'terrain_types':list(generator.sub_terrains),
+                    'terrain_proportions':{name:terrain.proportion for name,terrain in generator.sub_terrains.items()},
                     'protocol':'1s zero-command settle; bounded actor-mean replay. Startup mass/COM/material and PD randomization retained; fixed seed. No pushes/no observation noise/no automatic resets. Failure samples remain in trace. Pyramid includes a flat platform: nominal angle alone does not prove slope traversal.',
                     'slip':'World foot velocity projected onto local terrain tangent; ground stationary',
                     'validation':'CPU syntax only for this portable recorder; validate in Isaac before quantitative use'}

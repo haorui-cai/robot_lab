@@ -1,6 +1,6 @@
 # TQBot2 自由步态对照：另一台电脑训练说明
 
-本分支准备两个**随机初始化**任务。`free` 只从已经核准的 V4 配置删除步态塑形；`v4` 保留 V4 作为配对基线。没有 HIM、模仿学习或周期命令输入。本机只运行原 V4 从头实验，**没有启动这里的 free 训练**。自由探索不保证自动得到低步频或好步态，需要按速度、稳定性、滑移和坡面表现验收。
+本分支准备两个**随机初始化**任务。`free` 从已经核准的 V4 配置删除步态塑形，并按用户最新要求只保留平地和坡面；`v4` 保留原完整 V4 地形作为历史基线。现在两者同时存在奖励与地形差异，不能把结果差异全部归因于奖励消融。没有 HIM、模仿学习或周期命令输入。本机只运行原 V4 从头实验，**没有启动这里的 free 训练**。自由探索不保证自动得到低步频或好步态，需要按速度、稳定性、滑移和坡面表现验收。
 
 ## 1. 版本与私有模型
 
@@ -66,7 +66,23 @@ nvidia-smi
 
 边界：`feet_slide` 用当前接触状态惩罚支撑脚相对静止地面的滑移，没有目标频率、占空比或脚对时序；`contact_forces` 是瞬时载荷/冲击成本；`stand_still` 只在低命令下约束关节姿态。这些通用约束仍可能间接影响策略选择的步态，但没有规定节奏。已有未启用的 air-time/contact/height/frequency-excess/cycle-overdue 等塑形也保持关闭。
 
-机器人、碰撞、关节/力矩限制、动作、观测、命令、地形课程、随机化、PPO均继承冻结 V4。物理dt0.005s、decimation4、控制50Hz；actor45维、critic235维，MLP512/256/128，身份归一化；标称PD20/0.5并保留 V4 的增益随机化，不能与旧部署PD14/0.6混用。原 V4 的终止项为 time_out 与 terrain_out_of_bounds，`illegal_contact` 原本就是关闭的，本实验没有新增或关闭终止保护。身体非期望接触惩罚、物理限制和原有碰撞保持。地形包含原有台阶、粗糙面及坡面课程，坡面上限30度是训练配置上限，**不是已验证可爬30度**。
+除下述地形种类与比例外，机器人、碰撞、关节/力矩限制、动作、观测、命令、课程升级规则、随机化、PPO均继承冻结 V4。物理dt0.005s、decimation4、控制50Hz；actor45维、critic235维，MLP512/256/128，身份归一化；标称PD20/0.5并保留 V4 的增益随机化，不能与旧部署PD14/0.6混用。原 V4 的终止项为 time_out 与 terrain_out_of_bounds，`illegal_contact` 原本就是关闭的，本实验没有新增或关闭终止保护。身体非期望接触惩罚、物理限制和原有碰撞保持。自由步态地形仅为下表三类；原 `v4` 任务和本机正跑的 V4 不变。
+
+### 自由步态地形：平地与坡面
+
+| 最终sub_terrains键 | IsaacLab类型 | 比例 | 训练课程20列 |
+|---|---|---:|---:|
+| flat | MeshPlaneTerrainCfg | 0.20 | 4 |
+| hf_pyramid_slope | HfPyramidSlopedTerrainCfg，inverted=false | 0.40 | 8 |
+| hf_pyramid_slope_inv | HfInvertedPyramidSlopedTerrainCfg，inverted=true | 0.40 | 8 |
+
+代码直接替换最终 `sub_terrains` 字典，**移除** `pyramid_stairs`、`pyramid_stairs_inv`、`boxes`、`random_rough`，没有保留零权重旧种类。比例和为1，全部为正；初始化审计检查真实运行时最终集合。原课程/统计函数从这个最终字典动态建立列分组，所以不再访问或记录旧地形种类。10行、20列、8m×8m、difficulty_range=(0,1)、初始最高等级5、按行走距离升级/降级的规则保持原样。平地在所有行都是平地，平地等级上涨不代表爬坡能力。
+
+两类坡面保留原名义 `slope_range=(0, tan(30°))`、中心平台2m和边缘0.25m；不添加随机高度噪声或离散障碍。普通金字塔中心较高、倒置金字塔中心较低；两者都是截顶/平底的连续坡面，沿不同方向可经过上坡或下坡，不能把名称直接等同于只上坡/只下坡的轨迹。高度场仍有原0.1m水平/0.005m垂直离散化。
+
+IsaacLab课程按行采样 `difficulty=(row+U[0,1))/10`，名义坡度为 `difficulty*tan(30°)`，对应角度 `atan(difficulty*tan(30°))`，**不是每行等增3度**。第0行约0–3.3°，第9行约27.5–30°；局部几何法向、平顶与量化使实际脚下角度与名义值不同。30度仅为原训练范围上限，**不是已验证可爬30度**。
+
+普通 `play.py` 从该任务的最终配置取地形，调整网格尺寸/随机选难度，不重新引入障碍；仅对free关闭回放时的训练等级更新与按确定列分组的统计，因为随机生成地形不遵循训练课程的列分组。recorder的 `--terrain mixed` 对free也仅使用这三类，默认5×5网格；`--terrain flat`、`slope`、`slope-inv` 可分别做同一允许集合的单类评估，权重重设为1并校验。关闭评估课程后，各网格地形按比例随机采样，有限样本比例会波动；训练课程的20列则确定为4/8/8。原V4 baseline的mixed仍保留历史全地形，做公平回放时使用相同的flat/slope/slope-inv单类、速度、seed和角度。
 
 ## 4. 从头启动与显存
 
@@ -83,7 +99,7 @@ python scripts/TQBot2_train_control.py --variant v4 --num-envs 4096 --iterations
 
 4096环境/24步PPO rollout、12000更新与原 V4预算一致。16GB显卡是本机参考，其他显卡未测量；脚本暂以4096环境需8GiB空闲、2048需6GiB、其余需4GiB为保守启动门槛，**不是显存用量保证**。显存不足显式改 `--num-envs 1024` 或更少，并在记录中注明批量变化；不停止别人的进程，不自动重试或倍增seed。原 V4 本机早期每次更新约5秒、全程约17小时，另一电脑时间未知。启动前检查 `nvidia-smi`，不要把驱动状态与容器设备可见性混为一谈。
 
-`train_tqbot2_ablation.py` 在任何 checkpoint load 前审计：resume=false、warm_start为空、load_run=`__NO_RESUME__`、checkpoint=`__NO_CHECKPOINT__`、迭代0、Adam状态空、身份归一化、奖励集合正确。将 `fresh_initialization.json` 和 `initial_random_state.pt` 写到新run；保存actor/critic指纹、资产hash、代码commit、seed、环境数。审计失败就停止，不回退加载旧权重。每100次更新写checkpoint，不覆盖旧run。smoke与正式训练是两个独立随机初始化run。
+`train_tqbot2_ablation.py` 在任何 checkpoint load 前审计：resume=false、warm_start为空、load_run=`__NO_RESUME__`、checkpoint=`__NO_CHECKPOINT__`、迭代0、Adam状态空、身份归一化、奖励集合正确，并对free检查最终地形只含平地/坡面且比例有效。将 `fresh_initialization.json` 和 `initial_random_state.pt` 写到新run；保存actor/critic指纹、资产hash、代码commit、seed、环境数、地形种类/比例/行列数。审计失败就停止，不回退加载旧权重。每100次更新写checkpoint，不覆盖旧run。smoke与正式训练是两个独立随机初始化run。
 
 ```bash
 # 训练记录；将 RUN 替换为实际新目录，不要使用latest通配选择旧实验。
@@ -108,12 +124,13 @@ python scripts/reinforcement_learning/rsl_rl/train.py --task RobotLab-Isaac-Velo
 python scripts/reinforcement_learning/rsl_rl/play.py --task RobotLab-Isaac-Velocity-Rough-TQBot2-FreeGaitScratch-v0 --checkpoint "$RUN/model_100.pt" --num_envs 8 --max_steps 400 --headless
 ```
 
-附带的**新可移植 recorder 仅做过CPU语法检查，尚未在GPU运行**。先验证一次小规模录制的样本数/脚顺序/时间戳，再用于量化；它从已有200Hz录制方案移植，单独进行有界仿真，不接触实机：
+附带的**新可移植 recorder 做过CPU语法与地形选择检查，尚未在GPU运行**。先验证一次小规模录制的样本数/脚顺序/时间戳，再用于量化；它从已有200Hz录制方案移植，单独进行有界仿真，不接触实机：
 
 ```bash
 python scripts/reinforcement_learning/rsl_rl/record_tqbot2_ablation.py --variant free --checkpoint "$RUN/model_100.pt" --output eval/free100_speed05 --speed .5 --seconds 8 --num_envs 24 --headless --device cuda:0
 python scripts/tools/analyze_tqbot2_cadence.py eval/free100_speed05/trace.npz --output eval/free100_speed05/cadence.json
 # 坡面单独测试；名义角度不等于机器人实际到达斜坡。
+# 平地可用 --terrain flat，倒置坡面可用 --terrain slope-inv；mixed对free仅含平地/两类坡面。
 python scripts/reinforcement_learning/rsl_rl/record_tqbot2_ablation.py --variant free --checkpoint "$RUN/model_100.pt" --output eval/free100_slope05 --terrain slope --slope-deg 5 --speed .3 --seconds 12 --num_envs 8 --headless --device cuda:0
 ```
 
@@ -131,7 +148,7 @@ python scripts/reinforcement_learning/rsl_rl/record_tqbot2_ablation.py --variant
 
 ## 6. 已验证的范围
 
-- CPU：8项配置/初始化拒绝/命令测试、7项完整周期/去抖/缺失/重置边界测试；V4副本hash、7项删除/14项保留、默认计划不启动训练；所有新增Python语法检查。
-- CPU测试使用奖励合同fixture与纯Python操作，**没有宣称实例化了完整Isaac环境或实际跑过free PPO update**。
+- CPU：共22项测试，包括8项奖励/初始化拒绝/命令、7项最终地形/课程列分组/recorder选择/普通play配置、7项完整周期/去抖/缺失/重置边界；V4副本hash、7项删除/14项保留、默认计划不启动训练；所有新增或修改Python语法检查。
+- CPU测试使用奖励合同fixture、轻量V4父配置，执行实际free配置的post-init、课程列分组和recorder地形选择代码；**没有宣称实例化了完整Isaac环境或实际跑过free PPO update**。
 - 旧实测200Hz轨迹可供离线分析器回归；新 recorder 的GPU集成、干净机器安装、free训练、坡面成功率均未验证。
 - 没有权重、日志、私有资产或认证信息被提交。现有V4训练、旧配置/部署指针不受此分支影响。

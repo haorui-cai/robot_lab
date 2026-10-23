@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 
 from .free_gait_policy import REMOVED, V4_ACTIVE, active_reward_names
+from .free_gait_terrain import validate_free_gait_terrain
 
 
 def fingerprint(state):
@@ -33,6 +34,9 @@ def audit_fresh_start(runner, env_cfg, agent_cfg, args_cli, log_dir):
     expected = V4_ACTIVE - REMOVED.keys() if variant == "free" else V4_ACTIVE
     if active_reward_names(env_cfg.rewards) != expected:
         raise ValueError("Runtime reward set differs from reviewed variant")
+    generator = env_cfg.scene.terrain.terrain_generator
+    if variant == 'free':
+        validate_free_gait_terrain(generator)
     # Locate the checkout by its package metadata rather than a machine-specific path.
     root = next(parent for parent in Path(__file__).resolve().parents if (parent / "pyproject.toml").is_file())
     revision = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
@@ -48,6 +52,8 @@ def audit_fresh_start(runner, env_cfg, agent_cfg, args_cli, log_dir):
         "critic_fingerprint": fingerprint(runner.alg.critic.state_dict()),
         "asset_sha256": hashlib.sha256(model.read_bytes()).hexdigest(),
         "active_rewards": sorted(expected), "num_envs": env_cfg.scene.num_envs,
+        "terrain_proportions": {name: cfg.proportion for name, cfg in generator.sub_terrains.items()},
+        "terrain_rows_columns": [generator.num_rows, generator.num_cols],
         "iterations": agent_cfg.max_iterations,
     }
     torch.save({**runner.alg.save(), "iter": -1, "infos": audit}, output / "initial_random_state.pt")
