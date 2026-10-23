@@ -15,6 +15,8 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.utils.math import quat_apply_inverse, yaw_quat
 
+from .foot_symmetry import calibrate_diagonal_displacement, diagonal_displacement_cost
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -254,6 +256,47 @@ class GaitReward(ManagerTermBase):
         se_act_0 = torch.clip(torch.square(air_time[:, foot_0] - contact_time[:, foot_1]), max=self.max_err**2)
         se_act_1 = torch.clip(torch.square(contact_time[:, foot_0] - air_time[:, foot_1]), max=self.max_err**2)
         return torch.exp(-(se_act_0 + se_act_1) / self.std)
+
+
+class FootDisplacementSymmetry(ManagerTermBase):
+    """Compare diagonal feet's root-frame X/Z offsets from the standing pose.
+
+    Calibrate once against the old joint-mirror cost near that pose. Keep the
+    scale and reference fixed across resets; never use the first observed
+    (possibly fallen or randomized) pose, action offsets, or COM coordinates.
+    """
+
+    def __init__(self, cfg: RewTerm, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.robot = env.scene[cfg.params["asset_cfg"].name]
+        pairs = cfg.params["foot_pairs"]
+        if len(pairs) != 2 or any(len(pair) != 2 for pair in pairs):
+            raise ValueError("Foot displacement symmetry requires two diagonal pairs")
+        names = [name for pair in pairs for name in pair]
+        self.foot_ids, resolved = self.robot.find_bodies(names, preserve_order=True)
+        if resolved != names:
+            raise ValueError(f"Foot displacement ordering mismatch: {resolved} vs {names}")
+        defaults = self.robot.data.default_joint_pos
+        if not torch.allclose(defaults, defaults[0].expand_as(defaults)):
+            raise ValueError("Foot symmetry requires a shared default standing pose")
+        reference = dict(zip(self.robot.joint_names, defaults[0].detach().cpu().tolist()))
+        self.calibration = calibrate_diagonal_displacement(
+            self.robot.cfg.spawn.asset_path, names, reference,
+            cfg.params["calibration_perturbation_rad"], cfg.params["calibration_samples"],
+            cfg.params["calibration_seed"],
+        )
+        self.reference_positions_body = torch.tensor(
+            self.calibration["reference_positions_body"], device=env.device, dtype=defaults.dtype,
+        )
+        self.scale = self.calibration["scale"]
+
+    def __call__(self, env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, foot_pairs,
+                 calibration_perturbation_rad: float, calibration_samples: int, calibration_seed: int):
+        data = self.robot.data
+        relative = data.body_link_pos_w[:, self.foot_ids] - data.root_link_pos_w[:, None, :]
+        positions_body = quat_apply_inverse(data.root_link_quat_w[:, None, :].expand(-1, 4, -1), relative)
+        cost = self.scale * diagonal_displacement_cost(positions_body, self.reference_positions_body)
+        return cost * torch.clamp(-data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
 
 
 def joint_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joints: list[list[str]]) -> torch.Tensor:
@@ -530,8 +573,13 @@ def feet_height_body(
     asset_cfg: SceneEntityCfg,
     target_height: float,
     tanh_mult: float,
+    sensor_cfg: SceneEntityCfg | None = None,
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the ground"""
+    """Penalize foot link Z error in the articulation root link frame.
+
+    The imported root is TQBot2's trunk and Go2's base. target_height is a
+    root-relative coordinate, not world ground clearance or a COM offset.
+    """
     asset: RigidObject = env.scene[asset_cfg.name]
     cur_footpos_translated = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_pos_w[:, :].unsqueeze(1)
     footpos_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
@@ -548,7 +596,14 @@ def feet_height_body(
         )
     foot_z_target_error = torch.square(footpos_in_body_frame[:, :, 2] - target_height).view(env.num_envs, -1)
     foot_velocity_tanh = torch.tanh(tanh_mult * torch.norm(footvel_in_body_frame[:, :, :2], dim=2))
-    reward = torch.sum(foot_z_target_error * foot_velocity_tanh, dim=1)
+    foot_cost = foot_z_target_error * foot_velocity_tanh
+    if sensor_cfg is not None:
+        # ContactSensor already tracks stance/swing at each physics update.
+        sensor = env.scene[sensor_cfg.name]
+        if not sensor.cfg.track_air_time:
+            raise ValueError("Swing-only foot height requires ContactSensor.track_air_time=True")
+        foot_cost *= sensor.data.current_air_time[:, sensor_cfg.body_ids] > 0.0
+    reward = torch.sum(foot_cost, dim=1)
     reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
@@ -685,10 +740,3 @@ def flat_orientation_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Scen
     reward = torch.sum(torch.square(asset.data.projected_gravity_b[:, :2]), dim=1)
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
-
-
-def joint_target_rate_l2(env: ManagerBasedRLEnv, action_name: str = "joint_pos") -> torch.Tensor:
-    """Penalize changes in applied joint-position targets instead of raw actions."""
-    action_term = env.action_manager.get_term(action_name)
-    target_delta = action_term.processed_actions - action_term.previous_joint_targets
-    return torch.sum(torch.square(target_delta), dim=1)

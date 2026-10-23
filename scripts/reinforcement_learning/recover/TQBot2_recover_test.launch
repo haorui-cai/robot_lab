@@ -1,0 +1,16 @@
+<launch>
+  <arg name="run_dir"/>
+  <arg name="gui" default="true"/>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find unitree_gazebo)/worlds/empty_world.world"/>
+    <arg name="paused" value="true"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="use_sim_time" value="true"/>
+  </include>
+  <param name="robot_description" textfile="$(arg run_dir)/TQBot2.urdf"/>
+  <node pkg="gazebo_ros" type="spawn_model" name="TQBot2_recover_spawn" output="screen"
+        args="-sdf -file $(arg run_dir)/TQBot2.sdf -model TQBot2_gazebo -z 0.1207 -R 3.141592653589793"/>
+  <rosparam file="$(find TQBot2_description)/config/robot_control.yaml" command="load"/>
+  <node pkg="controller_manager" type="spawner" name="TQBot2_recover_controllers" ns="/TQBot2_gazebo" output="screen"
+        args="joint_state_controller FR_hip_controller FR_thigh_controller FR_calf_controller FL_hip_controller FL_thigh_controller FL_calf_controller RR_hip_controller RR_thigh_controller RR_calf_controller RL_hip_controller RL_thigh_controller RL_calf_controller"/>
+</launch>

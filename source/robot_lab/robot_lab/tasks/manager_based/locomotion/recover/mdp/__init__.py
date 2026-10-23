@@ -10,7 +10,51 @@ import math
 import torch
 
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
-from isaaclab.utils.math import quat_from_euler_xyz, random_orientation
+from isaaclab.utils.math import quat_apply, quat_from_euler_xyz, random_orientation
+
+
+# Only opposite legs on the same axle may collide in Recover.  Keeping this
+# policy here (rather than in the shared asset) prevents the walk/roll tasks
+# from inheriting a different collision model.
+_ALLOWED_CROSS_LEG_PAIRS = {frozenset(("FR", "FL")), frozenset(("RR", "RL"))}
+
+
+def spawn_with_cross_leg_collisions(prim_path, cfg, translation=None, orientation=None, **kwargs):
+    """Filter self contacts down to FR--FL and RR--RL.
+
+    PhysX needs articulation self collision enabled before it considers any
+    internal contacts.  This USD relationship then filters every rigid-body
+    pair except the two requested opposite-leg groups.  Same-leg pairs remain
+    filtered, matching the prior no-self-collision setting.
+
+    This is a spawn wrapper so it runs before environment replication and the
+    PhysX tensor views are created.  The source robot then supplies the same
+    filtered-pair relationships to every cloned environment.
+    """
+    from pxr import Usd, UsdPhysics
+
+    from robot_lab.assets.tqbot_spawn import spawn_tqbot2_from_urdf
+
+    robot_prim = spawn_tqbot2_from_urdf(prim_path, cfg, translation, orientation, **kwargs)
+
+    bodies = []
+    for prim in Usd.PrimRange(robot_prim):
+        if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            name = prim.GetName()
+            leg = next((prefix for prefix in ("FR", "FL", "RR", "RL") if name.startswith(f"{prefix}_")), None)
+            bodies.append((prim, leg))
+
+    if not bodies:
+        raise RuntimeError("Recover collision filter found no robot rigid bodies")
+
+    for index, (body_a, leg_a) in enumerate(bodies):
+        for body_b, leg_b in bodies[index + 1 :]:
+            allow = leg_a is not None and leg_b is not None and frozenset((leg_a, leg_b)) in _ALLOWED_CROSS_LEG_PAIRS
+            if allow:
+                continue
+            relationship = UsdPhysics.FilteredPairsAPI.Apply(body_a).CreateFilteredPairsRel()
+            relationship.AddTarget(body_b.GetPath())
+    return robot_prim
 
 
 def base_height(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
@@ -90,13 +134,88 @@ def upright(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
 
 
 def prone_settled(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
-    """Reward upright, low and quiet body; no preferred joint angles or speeds."""
+    """Reward upright, low and quiet body with legs below the upper body."""
     robot = env.scene[asset_cfg.name]
     # A low body is sufficient; do not track an exact FixedLie height.
     height_error = (base_height(env, asset_cfg).squeeze(-1) - 0.18).clamp_min(0.0).square()
     motion = robot.data.root_lin_vel_b.square().sum(-1) / 0.25**2
     motion += robot.data.root_ang_vel_b.square().sum(-1) / 0.75**2
-    return upright(env, asset_cfg).square() * torch.exp(-height_error / 0.08**2 - motion)
+    return upright(env, asset_cfg).square() * legs_down(env, asset_cfg) * torch.exp(-height_error / 0.08**2 - motion)
+
+
+def leg_height_excess(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), clearance: float = 0.04):
+    """World-vertical knee/foot excess above each thigh pivot; no angle target.
+
+    The calf link origin is the knee. The foot is 0.153 m along calf -Z in
+    this URDF, including when the fixed foot link is merged by the importer.
+    A 4 cm allowance permits different folded poses without accepting legs
+    pointing above the torso. World Z makes the check independent of yaw.
+    """
+    robot = env.scene[asset_cfg.name]
+    thigh_ids, _ = robot.find_bodies([f"{leg}_thigh" for leg in ("FR", "FL", "RR", "RL")], preserve_order=True)
+    calf_ids, _ = robot.find_bodies([f"{leg}_calf" for leg in ("FR", "FL", "RR", "RL")], preserve_order=True)
+    knee = robot.data.body_link_pos_w[:, calf_ids]
+    offset = torch.zeros_like(knee)
+    offset[..., 2] = -0.153
+    foot = knee + quat_apply(robot.data.body_link_quat_w[:, calf_ids], offset)
+    pivot_z = robot.data.body_link_pos_w[:, thigh_ids, 2]
+    return (torch.maximum(knee[..., 2], foot[..., 2]) - pivot_z - clearance).clamp_min(0.0)
+
+
+def legs_down(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")):
+    """Continuous shaping toward the same geometry used by success."""
+    return torch.exp(-leg_height_excess(env, asset_cfg).square().mean(-1) / 0.08**2)
+
+
+def upright_legs_down(env):
+    return upright(env).square() * legs_down(env)
+
+
+def ground_supported(env, sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces")):
+    # Internal leg contacts cancel when summed over the whole articulation;
+    # an individual body's net force could otherwise count self collision.
+    return env.scene[sensor_cfg.name].data.net_forces_w[..., 2].sum(-1) > 30.0
+
+
+def hold_weight(env):
+    """Smoothly strengthen leg regularization near the recovered posture."""
+    height_error = (base_height(env).squeeze(-1) - 0.18).clamp_min(0.0)
+    return upright(env).pow(8) * legs_down(env) * torch.exp(-height_error.square() / 0.08**2)
+
+
+def hold_joint_velocity(env):
+    velocity = env.scene["robot"].data.joint_vel
+    loss = torch.nn.functional.huber_loss(velocity, torch.zeros_like(velocity), reduction="none", delta=1.0)
+    return hold_weight(env) * loss.mean(-1)
+
+
+def hold_joint_acceleration(env):
+    acceleration = env.scene["robot"].data.joint_acc
+    loss = torch.nn.functional.huber_loss(
+        acceleration, torch.zeros_like(acceleration), reduction="none", delta=100.0
+    )
+    return hold_weight(env) * loss.mean(-1)
+
+
+class HoldTargetRate(ManagerTermBase):
+    """Penalize changes of clipped physical targets in rad/s during holding."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self._previous = env.action_manager.get_term("joint_pos").processed_actions.clone()
+        self._valid = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+    def reset(self, env_ids=None):
+        self._valid[slice(None) if env_ids is None else env_ids] = False
+
+    def __call__(self, env):
+        target = env.action_manager.get_term("joint_pos").processed_actions
+        rate = (target - self._previous) / env.step_dt
+        loss = torch.nn.functional.huber_loss(rate, torch.zeros_like(rate), reduction="none", delta=1.0)
+        result = hold_weight(env) * loss.mean(-1) * self._valid
+        self._previous.copy_(target)
+        self._valid[:] = True
+        return result
 
 
 def is_prone(
@@ -104,10 +223,10 @@ def is_prone(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     sensor_cfg: SceneEntityCfg = SceneEntityCfg("contact_forces"),
 ):
-    """A supported, low and upright body, regardless of joint configuration."""
+    """Supported, low, upright, legs down; no fixed joint-angle requirement."""
     robot = env.scene[asset_cfg.name]
     height = base_height(env, asset_cfg).squeeze(-1)
-    support = env.scene[sensor_cfg.name].data.net_forces_w.norm(dim=-1).amax(dim=-1) > 1.0
+    support = ground_supported(env, sensor_cfg)
     return (
         (robot.data.projected_gravity_b[:, 2] < -0.95)
         & (height > 0.02)
@@ -115,6 +234,16 @@ def is_prone(
         & (robot.data.root_lin_vel_b.norm(dim=-1) < 0.15)
         & (robot.data.root_ang_vel_b.norm(dim=-1) < 0.5)
         & support
+        & (leg_height_excess(env, asset_cfg).amax(-1) <= 1.0e-5)
+    )
+
+
+def is_quiet_prone(env, joint_rms_speed: float = 0.25, joint_max_speed: float = 0.75):
+    velocity = env.scene["robot"].data.joint_vel
+    return (
+        is_prone(env)
+        & (velocity.square().mean(-1) < joint_rms_speed**2)
+        & (velocity.abs().amax(-1) < joint_max_speed)
     )
 
 
@@ -128,8 +257,12 @@ class StableProne(ManagerTermBase):
     def reset(self, env_ids=None):
         self._stable_steps[slice(None) if env_ids is None else env_ids] = 0
 
-    def __call__(self, env, hold_time: float = 0.5, settle_time: float = 1.0):
-        valid = is_prone(env) & (env.episode_length_buf * env.step_dt >= settle_time)
+    def __call__(
+        self, env, hold_time: float = 4.0, settle_time: float = 1.0,
+        joint_rms_speed: float = 0.25, joint_max_speed: float = 0.75,
+    ):
+        valid = is_quiet_prone(env, joint_rms_speed, joint_max_speed)
+        valid &= env.episode_length_buf * env.step_dt >= settle_time
         self._stable_steps[:] = torch.where(valid, self._stable_steps + 1, 0)
         return self._stable_steps >= math.ceil(hold_time / env.step_dt)
 

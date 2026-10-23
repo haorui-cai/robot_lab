@@ -13,6 +13,23 @@ spec.loader.exec_module(motion)
 
 
 class FootMotionTests(unittest.TestCase):
+    def test_surface_slip_distinguishes_rolling_drag_and_swing(self):
+        normal = torch.tensor([[[0., 0., 1.]]]).repeat(4, 1, 1)
+        velocity = torch.tensor([[[0., 0., 0.]], [[.3, 0., 0.]], [[.3, 0., 0.]], [[.3, 0., 0.]]])
+        omega = torch.zeros_like(velocity)
+        omega[2, 0, 1] = 25.  # 0.012-m sphere rolling at 0.3 m/s has zero contact slip.
+        support = torch.tensor([[True], [True], [True], [False]])
+        slip = motion.support_foot_slip(velocity, omega, normal, support, .012)
+        torch.testing.assert_close(slip, torch.tensor([0., .3, 0., 0.]), atol=1e-7, rtol=1e-6)
+
+    def test_surface_slip_ignores_normal_impact_and_sums_support_feet(self):
+        normal = torch.tensor([[[0., -.5, 3.**.5 / 2]]]).repeat(2, 2, 1)
+        tangent = torch.tensor([[[0., 3.**.5 / 2, .5]]]).repeat(2, 2, 1)
+        velocity = torch.stack((normal[0] * 2., tangent[0] * .4))
+        slip = motion.support_foot_slip(velocity, torch.zeros_like(velocity), normal,
+                                      torch.ones(2, 2, dtype=torch.bool), .012)
+        torch.testing.assert_close(slip, torch.tensor([0., .8]), atol=1e-6, rtol=1e-6)
+
     def test_rotating_calf_requires_point_velocity_not_com_velocity(self):
         pos = torch.zeros(1, 1, 3)
         quat = torch.tensor([[[2.**-.5, 0., 2.**-.5, 0.]]])

@@ -1,3 +1,6 @@
 [submodule "docs/rl-notes"]
 	path = docs/rl-notes
 	url = https://github.com/haorui-cai/Docs_of_RL
+[submodule "external/tqbot_description"]
+	path = external/tqbot_description
+	url = git@github.com:ustc-407lab/tqbot_description.git

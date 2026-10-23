@@ -4,8 +4,9 @@ from itertools import product
 
 from pxr import Usd, UsdPhysics
 
-import isaaclab.sim as sim_utils
 from isaaclab.sim.utils import clone
+
+from robot_lab.assets.tqbot_spawn import spawn_tqbot2_from_urdf
 
 
 LEG_LINKS = {
@@ -16,6 +17,14 @@ WALK_SELF_COLLISION_PAIRS = frozenset(
     frozenset(pair)
     for left, right in (("FL", "FR"), ("RL", "RR"))
     for pair in product(LEG_LINKS[left], LEG_LINKS[right])
+)
+LEG_LINKS_WITH_FEET = {
+    leg: links + (f"{leg}_foot",) for leg, links in LEG_LINKS.items()
+}
+WALK_SELF_COLLISION_PAIRS_WITH_FEET = frozenset(
+    frozenset(pair)
+    for left, right in (("FL", "FR"), ("RL", "RR"))
+    for pair in product(LEG_LINKS_WITH_FEET[left], LEG_LINKS_WITH_FEET[right])
 )
 
 
@@ -29,14 +38,19 @@ def spawn_tqbot2_walk_with_leg_collisions(prim_path, cfg, translation=None, orie
     """
     if not cfg.articulation_props.enabled_self_collisions:
         raise ValueError("TQBot2 walking leg collisions require enabled_self_collisions=True")
-    root = sim_utils.spawn_from_urdf(prim_path, cfg, translation, orientation, **kwargs)
+    root = spawn_tqbot2_from_urdf(prim_path, cfg, translation, orientation, **kwargs)
     bodies = {
         prim.GetName(): prim
         for prim in Usd.PrimRange(root)
         if prim.HasAPI(UsdPhysics.RigidBodyAPI)
     }
     expected = {"trunk"} | {name for links in LEG_LINKS.values() for name in links}
-    if set(bodies) != expected:
+    feet = {f"{leg}_foot" for leg in LEG_LINKS}
+    if set(bodies) == expected | feet:
+        allowed_pairs = WALK_SELF_COLLISION_PAIRS_WITH_FEET
+    elif set(bodies) == expected:
+        allowed_pairs = WALK_SELF_COLLISION_PAIRS
+    else:
         raise RuntimeError(f"Unexpected TQBot2 walking rigid bodies: {sorted(bodies)}")
     trunk_colliders = [
         prim.GetPath()
@@ -63,7 +77,7 @@ def spawn_tqbot2_walk_with_leg_collisions(prim_path, cfg, translation=None, orie
         excluded = [
             other.GetPath()
             for other_name, other in bodies.items()
-            if other_name not in (name, "trunk") and frozenset((name, other_name)) not in WALK_SELF_COLLISION_PAIRS
+            if other_name not in (name, "trunk") and frozenset((name, other_name)) not in allowed_pairs
         ]
         rel.SetTargets(external + excluded + trunk_colliders)
     return root

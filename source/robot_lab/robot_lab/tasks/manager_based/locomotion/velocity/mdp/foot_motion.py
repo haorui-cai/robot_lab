@@ -16,6 +16,16 @@ def tangent_velocity(velocity, normal):
     return velocity - (velocity * normal).sum(dim=-1, keepdim=True) * normal
 
 
+def support_foot_slip(linear_velocity, angular_velocity, normal, support, radius):
+    """Tangential velocity of a spherical foot's surface against static terrain.
+
+    Link origin is the sphere center. Include omega cross r so rolling without
+    surface slip is free; normal impact velocity and swing feet cost zero.
+    """
+    contact_velocity = linear_velocity + torch.cross(angular_velocity, -radius * normal, dim=-1)
+    return (tangent_velocity(contact_velocity, normal).norm(dim=-1) * support).sum(dim=1)
+
+
 def foot_motion_costs(clearance, foot_velocity, root_velocity, normal, contact, valid,
                       target_clearance=0.03, contact_clearance=0.02, motion_scale=0.2):
     """Stationary loaded feet cost zero; moving swing feet need a minimum clearance.

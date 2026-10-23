@@ -42,7 +42,10 @@ class RecoverSceneCfg(InteractiveSceneCfg):
             restitution=0.0,
         ),
     )
-    robot = TQBOT2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+    robot = TQBOT2_CFG.replace(
+        prim_path="{ENV_REGEX_NS}/Robot",
+        spawn=TQBOT2_CFG.spawn.replace(func=recover_mdp.spawn_with_cross_leg_collisions, self_collision=True),
+    )
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3)
     light = AssetBaseCfg(prim_path="/World/light", spawn=sim_utils.DomeLightCfg(intensity=1000.0))
 
@@ -118,20 +121,24 @@ class EventsCfg:
 class RewardsCfg:
     upright = RewTerm(func=recover_mdp.upright, weight=3.0)
     prone_settled = RewTerm(func=recover_mdp.prone_settled, weight=6.0)
+    legs_down = RewTerm(func=recover_mdp.upright_legs_down, weight=4.0)
     # Keep scoring the maintained pose until the dwell-time termination fires.
     prone = RewTerm(func=recover_mdp.is_prone, weight=4.0)
-    # At 50 Hz this is +30 once. It exceeds the maximum discounted continuing
-    # posture return (13 * .02 / (1 - .99) = 26), so success is worth finishing.
-    success_bonus = RewTerm(func=mdp.is_terminated_term, weight=1500.0, params={"term_keys": "success"})
+    # At 50 Hz this is +50 once. It exceeds the maximum discounted continuing
+    # posture return (17 * .02 / (1 - .99) = 34), so success is worth finishing.
+    success_bonus = RewTerm(func=mdp.is_terminated_term, weight=2500.0, params={"term_keys": "success"})
     joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-5)
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.003)
+    hold_joint_velocity = RewTerm(func=recover_mdp.hold_joint_velocity, weight=-0.3)
+    hold_joint_acceleration = RewTerm(func=recover_mdp.hold_joint_acceleration, weight=-2.0e-5)
+    hold_target_rate = RewTerm(func=recover_mdp.HoldTargetRate, weight=-0.01)
     joint_limits = RewTerm(func=mdp.joint_pos_limits, weight=-2.0)
 
 
 @configclass
 class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-    success = DoneTerm(func=recover_mdp.StableProne, params={"hold_time": 0.5, "settle_time": 1.0})
+    success = DoneTerm(func=recover_mdp.StableProne, params={"hold_time": 4.0, "settle_time": 1.0})
     escaped = DoneTerm(func=recover_mdp.escaped)
     # Body/hip/thigh/knee contacts and inverted orientations are valid states.
 
@@ -147,7 +154,7 @@ class TQBot2RecoverEnvCfg(ManagerBasedRLEnvCfg):
 
     def __post_init__(self):
         self.decimation = 4
-        self.episode_length_s = 12.0
+        self.episode_length_s = 16.0
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
@@ -157,10 +164,7 @@ class TQBot2RecoverEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.robot.init_state.rot = (0.0, 1.0, 0.0, 0.0)
         self.scene.robot.init_state.joint_pos = PRONE_JOINT_POS.copy()
         self.scene.robot.soft_joint_pos_limit_factor = 1.0
-        self.scene.robot.actuators["hip_thigh"].stiffness = 40.0
-        self.scene.robot.actuators["hip_thigh"].damping = 2.0
-        self.scene.robot.actuators["calf"].stiffness = 60.0
-        self.scene.robot.actuators["calf"].damping = 3.0
+        # Use the shared TQBot2 deployment-aligned nominal gains (14 / 0.6).
         self.scene.robot.spawn.articulation_props.enabled_self_collisions = True
         self.scene.robot.spawn.articulation_props.solver_position_iteration_count = 8
         self.scene.robot.spawn.articulation_props.solver_velocity_iteration_count = 2

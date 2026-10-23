@@ -32,3 +32,28 @@ class TQBot2RollPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+
+@configclass
+class TQBot2RollHipOnlyPPORunnerCfg(TQBot2RollPPORunnerCfg):
+    experiment_name = "tqbot2_roll_hip_only"
+    run_name = "curled_thigh168_calf282"
+
+
+@configclass
+class TQBot2RollHipOnlyCyclePPORunnerCfg(TQBot2RollPPORunnerCfg):
+    experiment_name = "tqbot2_roll_hip_only_cycle"
+    run_name = "phase_yaw_curriculum_seeded_roll"
+    clip_actions = 1.0
+
+
+@configclass
+class TQBot2RollLeftThighCyclePPORunnerCfg(TQBot2RollHipOnlyCyclePPORunnerCfg):
+    experiment_name = "tqbot2_roll_left_thigh_cycle"
+    run_name = "left_thigh_168_245_phase_yaw_curriculum"
+
+
+@configclass
+class TQBot2RollLeftThighSlopePPORunnerCfg(TQBot2RollLeftThighCyclePPORunnerCfg):
+    experiment_name = "tqbot2_roll_left_thigh_slope"
+    run_name = "up10_down30_yaw5_assist_decay"

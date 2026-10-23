@@ -8,6 +8,8 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from robot_lab.assets import ISAACLAB_ASSETS_DATA_DIR
+from robot_lab.assets.tqbot_spawn import spawn_tqbot2_from_urdf
+from robot_lab.assets.tqbot_walk_stance import WALK_STANDING_JOINT_POS
 
 ##
 # Configuration
@@ -15,6 +17,7 @@ from robot_lab.assets import ISAACLAB_ASSETS_DATA_DIR
 
 TQBOT2_CFG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
+        func=spawn_tqbot2_from_urdf,
         fix_base=False,
         merge_fixed_joints=True,
         replace_cylinders_with_capsules=False,
@@ -56,18 +59,28 @@ TQBOT2_CFG = ArticulationCfg(
             joint_names_expr=[".*hip_joint", ".*thigh_joint"],
             effort_limit_sim=23.7,
             velocity_limit_sim=30.1,
-            stiffness=20.0,
-            damping=0.5,
-            friction=0.2,
+            stiffness=14.0,
+            damping=0.6,
+            # Isaac Sim 5+: friction is static effort in N*m, not the legacy coefficient.
+            friction=0.4,
+            dynamic_friction=0.4,
+            viscous_friction=0.0,
         ),
         "calf": ImplicitActuatorCfg(
             joint_names_expr=[".*calf_joint"],
             effort_limit_sim=35.55,
             velocity_limit_sim=20.06,
-            stiffness=20.0,
-            damping=0.5,
-            friction=0.2,
+            stiffness=14.0,
+            damping=0.6,
+            friction=0.4,
+            dynamic_friction=0.4,
+            viscous_friction=0.0,
         ),
     },
 )
 """Configuration of TQBot2 using implicit actuator model."""
+
+TQBOT2_WALK_CFG = TQBOT2_CFG.replace(
+    init_state=TQBOT2_CFG.init_state.replace(joint_pos=WALK_STANDING_JOINT_POS.copy())
+)
+"""Standing/reset/reward reference; policy action zero is configured separately."""

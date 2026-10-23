@@ -11,6 +11,7 @@ from robot_lab.assets.tqbot import TQBOT2_CFG  # TQBot2 机器人配置
 from robot_lab.tasks.manager_based.locomotion.roll.roll_env_cfg import RollRoughEnvCfg  # 父类环境配置
 
 import robot_lab.tasks.manager_based.locomotion.roll.mdp as roll_mdp  # 翻滚专用MDP函数
+from robot_lab.tasks.manager_based.locomotion.roll.mdp.base_acceleration import base_acceleration_rewards
 import robot_lab.tasks.manager_based.locomotion.velocity.mdp as vmdp  # 通用MDP函数（行走移植）
 
 # 3cm凹凸地形（固定噪声，作为域随机化，不设难度课程）
@@ -60,10 +61,22 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         # ------------------------------Actions------------------------------
         # 不使用 URDF 默认关节位置作为 offset
         self.actions.joint_pos.use_default_offset = False
-        # 动作缩放：hip=1.58, thigh=2.3, calf=0（策略不控制小腿）
-        self.actions.joint_pos.scale = {".*_hip_joint": 1.58, ".*_thigh_joint": 2.3, ".*_calf_joint": 0.0}
-        # 动作偏移：右髋+0.644，左髋-0.644，大腿+1.475，小腿-2.98
-        self.actions.joint_pos.offset = {".*R_hip_joint": 0.644, ".*L_hip_joint": -0.644, ".*_thigh_joint": 1.475, ".*_calf_joint": -2.98}
+        # 综合仿真（平地速度/偏航、上下坡）的稳定连续滚动 command-q 统计：
+        # 右 hip/thigh 固定于 (+1.57, +1.68)，左 hip 为 [-1.57, -0.71]、
+        # 左 thigh 为 [1.68, 2.69]（均为 1--99%）。左右腿取并集后，让同类
+        # 关节共享动作幅度；offset 仍分别置于各侧的运动中心，并保留约 15% 裕量。
+        self.actions.joint_pos.scale = {
+            ".*_hip_joint": 0.50,
+            ".*_thigh_joint": 0.60,
+            ".*_calf_joint": 0.0,
+        }
+        self.actions.joint_pos.offset = {
+            ".*R_hip_joint": 1.57,
+            ".*L_hip_joint": -1.14,
+            ".*R_thigh_joint": 1.68,
+            ".*L_thigh_joint": 2.19,
+            ".*_calf_joint": -2.82,
+        }
         # 明确指定 12 个关节
         self.actions.joint_pos.joint_names = self.joint_names
 
@@ -120,8 +133,14 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
         )
 
         # ------------------------------Rewards------------------------------
-        # 惩罚机身z轴线速度（防止靠弹跳来翻滚）
-        self.rewards.lin_vel_z_l2.weight = -1.0
+        # Use the corrected virtual base and fixed world axes for regularization.
+        self.rewards.lin_vel_z_l2 = None
+        self.rewards.roll_anti_jump = None
+        self.rewards.base_height_above = None
+        self.rewards.base_height_l2 = None
+        self.rewards.body_lin_acc_l2 = None
+        for name, term in base_acceleration_rewards().items():
+            setattr(self.rewards, name, term)
         # 惩罚机身俯仰/偏航角速度（让翻滚更纯粹）
         # self.rewards.ang_vel_xy_l2.weight = 0
         # 不约束机身高度（翻滚时机身自然贴地）
@@ -159,16 +178,6 @@ class TQBot2RollRoughEnvCfg(RollRoughEnvCfg):
 
         # 不奖励机身朝上（翻滚时不需要保持正立）
         self.rewards.upward.weight = 0
-        # 惩罚机身离地超过 0.13m
-        self.rewards.base_height_above = RewTerm(
-            func=roll_mdp.base_height_above_l1, weight=-2.0,
-            params={"threshold": 0.13, "asset_cfg": SceneEntityCfg("robot"), "sensor_cfg": SceneEntityCfg("height_scanner_base")},
-        )
-        # 惩罚机身 z 轴速度和加速度（防跳跃）
-        self.rewards.roll_anti_jump = RewTerm(
-            func=roll_mdp.roll_anti_jump, weight=-1.0,
-            params={"vel_weight": 2.0, "acc_weight": 5.0e-3},
-        )
 
         # 禁用所有腿式行走相关奖励（翻滚用不到）
         # self.rewards.track_lin_vel_xy_exp = None  # 不追踪线速度

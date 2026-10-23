@@ -44,4 +44,50 @@ ENGLISH = {
     'Episode_Termination/terrain_out_of_bounds': 'Terrain boundary termination fraction',
     'Episode_Termination/high_friction_flat_exit': 'High-friction flat exit fraction',
 }
-LABELS['feet_height_body'] = '相对机身的小腿高度惩罚'
+LABELS['feet_height_body'] = '相对机身的足端刚体高度惩罚'
+ENGLISH['feet_height_body'] = 'Body-relative foot-body height penalty'
+LABELS['feet_slide'] = '足端滑移项'
+ENGLISH['feet_slide'] = 'Foot slip term'
+LABELS['feet_frequency'] = '足端完整周期步频奖励'
+ENGLISH['feet_frequency'] = 'Measured full-cycle foot frequency reward'
+LABELS['feet_frequency_excess'] = '足端过高步频惩罚'
+ENGLISH['feet_frequency_excess'] = 'Excess full-cycle foot frequency penalty'
+LABELS['feet_ground_clearance'] = '摆动足底对地净空误差惩罚'
+ENGLISH['feet_ground_clearance'] = 'Terrain-relative swing-foot clearance error penalty'
+
+TERRAINS = {
+    'pyramid_stairs': ('凸形阶梯', 'Pyramid stairs'),
+    'pyramid_stairs_inv': ('凹形阶梯', 'Inverted pyramid stairs'),
+    'boxes': ('随机方块', 'Random boxes'),
+    'random_rough': ('随机起伏', 'Random rough terrain'),
+    'hf_pyramid_slope': ('凸形坡面', 'Pyramid slope'),
+    'hf_pyramid_slope_inv': ('凹形坡面', 'Inverted pyramid slope'),
+    'high_friction_flat': ('高摩擦平地', 'High-friction flat'),
+}
+TERRAIN_STATS = {
+    'mean': ('平均课程等级', 'Mean curriculum level', '等级', 'level'),
+    'max': ('最高当前等级', 'Highest current level', '等级', 'level'),
+    'env_count': ('环境数量', 'Environment count', '环境', 'environments'),
+    'move_up_rate': ('复位批次升级请求比例', 'Reset-batch promotion request fraction', '比例', 'fraction'),
+    'move_down_rate': ('复位批次降级请求比例', 'Reset-batch demotion request fraction', '比例', 'fraction'),
+    'top_completed_rate': ('复位批次最高级完成比例', 'Reset-batch top-level completion fraction', '比例', 'fraction'),
+}
+
+
+def terrain_descriptor(tag):
+    parts = tag.split('/')
+    if len(parts) != 4 or parts[:2] != ['Curriculum', 'terrain_breakdown']:
+        return None
+    name, name_en = TERRAINS.get(parts[2], (parts[2], parts[2]))
+    stat = parts[3]
+    if stat.startswith('level_') and stat.endswith('_fraction'):
+        level = stat.removeprefix('level_').removesuffix('_fraction')
+        zh, en, unit, unit_en = f'等级 {level} 占比', f'Level {level} fraction', '比例', 'fraction'
+    else:
+        zh, en, unit, unit_en = TERRAIN_STATS.get(stat, (stat, stat, '', ''))
+    return {
+        'tag': tag, 'name': f'{name} · {zh}', 'name_en': f'{name_en} · {en}',
+        'unit': unit, 'unit_en': unit_en, 'direction': 'neutral',
+        'hint': '按出生地形列分组，各环境独立升级。批次比例不是累计通过率；当前等级不等于固定坡度性能验收。',
+        'hint_en': 'Grouped by spawn-terrain column; environments progress independently. Batch fractions are not cumulative success rates or fixed-slope evaluations.',
+    }

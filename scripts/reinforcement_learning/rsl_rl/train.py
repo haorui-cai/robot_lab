@@ -31,6 +31,14 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
+    "--completion_event_file", type=str, default=None,
+    help="Atomically write a completion event after learning and environment shutdown.",
+)
+parser.add_argument(
+    "--warm_start", type=str, default=None,
+    help="Initialize actor/critic weights from a checkpoint with fresh optimizer and iteration count.",
+)
+parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
@@ -42,6 +50,8 @@ cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+if args_cli.warm_start and args_cli.resume:
+    parser.error("--warm_start and --resume are mutually exclusive")
 
 # always enable cameras to record video
 if args_cli.video:
@@ -215,18 +225,57 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path)
+        if agent_cfg.resume and agent_cfg.algorithm.class_name == "PPO":
+            # RSL-RL stores the last completed iteration, whereas learn() starts
+            # at current_learning_iteration. Continue at the following update.
+            runner.current_learning_iteration += 1
+            # Loading Adam restores its rate but not PPO's adaptive-schedule
+            # scalar. Keep both aligned instead of resetting the schedule.
+            runner.alg.learning_rate = runner.alg.optimizer.param_groups[0]["lr"]
+            print(f"[INFO]: Resume next iteration: {runner.current_learning_iteration}; "
+                  f"restored adaptive learning rate: {runner.alg.learning_rate}")
+    elif args_cli.warm_start:
+        warm_start_path = os.path.abspath(args_cli.warm_start)
+        print(f"[INFO]: Warm starting actor/critic from: {warm_start_path}; optimizer and iteration reset")
+        runner.load(warm_start_path, load_cfg={"actor": True, "critic": True})
+        # Capture provenance even though this is a new reward/termination run.
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "warm_start.txt"), "w") as file:
+            file.write(warm_start_path + "\n")
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
 
     # run training
+    first_iteration = runner.current_learning_iteration
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
     print(f"Training time: {round(time.time() - start_time, 2)} seconds")
 
     # close the simulator
     env.close()
+
+    if args_cli.completion_event_file:
+        import json
+        from pathlib import Path
+        from datetime import timezone, timedelta
+
+        event_path = Path(args_cli.completion_event_file).resolve()
+        event_path.parent.mkdir(parents=True, exist_ok=True)
+        event = {
+            "status": "completed",
+            "finished_at": datetime.now(timezone(timedelta(hours=8))).isoformat(),
+            "task": args_cli.task,
+            "log_dir": log_dir,
+            "iterations_requested": agent_cfg.max_iterations,
+            "iterations_completed": runner.current_learning_iteration - first_iteration + 1,
+            "last_iteration_index": runner.current_learning_iteration,
+            "checkpoint": os.path.join(log_dir, f"model_{runner.current_learning_iteration}.pt"),
+        }
+        temporary = event_path.with_suffix(event_path.suffix + ".tmp")
+        temporary.write_text(json.dumps(event, indent=2) + "\n")
+        temporary.replace(event_path)
 
 
 if __name__ == "__main__":

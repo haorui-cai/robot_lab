@@ -1,4 +1,3 @@
-from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
@@ -12,6 +11,7 @@ from robot_lab.tasks.manager_based.locomotion.velocity.velocity_env_cfg import (
 # Pre-defined configs
 ##
 from robot_lab.assets.tqbot import TQBOT2_CFG  # isort: skip
+from robot_lab.assets.tqbot_collision import spawn_tqbot2_walk_with_leg_collisions
 
 
 @configclass
@@ -33,6 +33,8 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # ------------------------------Sence------------------------------
         self.scene.robot = TQBOT2_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        self.scene.robot.spawn.articulation_props.enabled_self_collisions = True
+        self.scene.robot.spawn.func = spawn_tqbot2_walk_with_leg_collisions
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
         self.scene.height_scanner_base.prim_path = "{ENV_REGEX_NS}/Robot/" + self.base_link_name
 
@@ -53,30 +55,19 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.observations.policy.height_scan = None
         self.observations.policy.joint_pos.params["asset_cfg"].joint_names = self.joint_names
         self.observations.policy.joint_vel.params["asset_cfg"].joint_names = self.joint_names
-        self.observations.policy.recovery_alpha = ObsTerm(
-            func=mdp.recovery_alpha, params={"action_name": "joint_pos"}
-        )
-        self.observations.critic.recovery_alpha = ObsTerm(
-            func=mdp.recovery_alpha, params={"action_name": "joint_pos"}
-        )
 
         # ------------------------------Actions------------------------------
-        # Use compact walking targets while upright, then smoothly expose all
-        # leg joints to their 90% soft limits as the robot falls.
-        self.actions.joint_pos = mdp.RecoveryJointPositionActionCfg(
-            asset_name="robot",
-            joint_names=self.joint_names,
-            scale={".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25},
-            use_default_offset=True,
-            clip=None,
-            preserve_order=True,
-            upright_gravity_z=-0.9,
-            fallen_gravity_z=-0.4,
-            activation_rate=5.0,
-            deactivation_rate=2.0,
-        )
+        self.actions.joint_pos.scale = {".*_hip_joint": 0.125, "^(?!.*_hip_joint).*": 0.25}
+        self.actions.joint_pos.clip = {".*": (-100.0, 100.0)}
+        self.actions.joint_pos.joint_names = self.joint_names
 
         # ------------------------------Events------------------------------
+        # Apply the foot material override after the inherited whole-body event.
+        self.events.randomize_foot_material = self.events.randomize_rigid_body_material.copy()
+        foot_material = self.events.randomize_foot_material.params
+        foot_material["asset_cfg"].body_names = [self.foot_link_name]
+        foot_material["static_friction_range"] = (0.15, 1.0)
+        foot_material["dynamic_friction_range"] = (0.15, 0.8)
         self.events.randomize_reset_base.params = {
             "pose_range": {
                 "x": (-0.5, 0.5),
@@ -133,8 +124,6 @@ class TQBot2RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Action penalties
         self.rewards.action_rate_l2.weight = -0.01
-        self.rewards.action_rate_l2.func = mdp.joint_target_rate_l2
-        self.rewards.action_rate_l2.params = {"action_name": "joint_pos"}
 
         # Contact sensor
         self.rewards.undesired_contacts.weight = -1.0

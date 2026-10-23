@@ -44,7 +44,8 @@ agent = handle_deprecated_rsl_rl_cfg(TQBot2RecoverPPORunnerCfg(), importlib.meta
 runner = OnPolicyRunner(wrapped, agent.to_dict(), log_dir=None, device=env.device)
 runner.load(args.checkpoint)
 policy = runner.get_inference_policy(device=env.device)
-result = {"checkpoint": str(Path(args.checkpoint).resolve()), "num_envs": args.num_envs, "horizon_seconds": 12.0}
+result = {"checkpoint": str(Path(args.checkpoint).resolve()), "num_envs": args.num_envs,
+          "horizon_seconds": 16.0, "quiet_hold_seconds": 4.0, "criterion_version": "legs_down_quiet_hold_v3"}
 
 with torch.inference_mode():
     for mode in ("zero_action", "policy"):
@@ -56,13 +57,22 @@ with torch.inference_mode():
         start_range = [gravity_z.min().item(), gravity_z.max().item()]
         streak = torch.zeros(env.num_envs, dtype=torch.long, device=env.device)
         first_time = torch.full((env.num_envs,), float("nan"), device=env.device)
-        for step in range(600):
+        final_pose, final_speed, final_target_rate = [], [], []
+        previous_target = None
+        for step in range(800):
             actions = torch.zeros(env.num_envs, 12, device=env.device) if mode == "zero_action" else policy(obs)
             obs, _, _, _ = wrapped.step(actions)
-            good = mdp.is_prone(env) & (env.episode_length_buf >= 50)
+            good = mdp.is_quiet_prone(env) & (env.episode_length_buf >= 50)
+            velocity = env.scene["robot"].data.joint_vel
             streak = torch.where(good, streak + 1, 0)
-            first = (streak >= 25) & first_time.isnan()
+            first = (streak >= 200) & first_time.isnan()
             first_time[first] = (step + 1) * env.step_dt
+            target = env.action_manager.get_term("joint_pos").processed_actions.clone()
+            if step >= 600:
+                final_pose.append(mdp.is_prone(env).clone())
+                final_speed.append(velocity.square().mean(-1).sqrt())
+                final_target_rate.append(((target - previous_target) / env.step_dt).square().mean(-1).sqrt())
+            previous_target = target
         succeeded = first_time.isfinite()
         result[mode] = {
             "initial_gravity_z_range": start_range,
@@ -70,6 +80,9 @@ with torch.inference_mode():
             "success_rate": succeeded.float().mean().item(),
             "mean_recovery_seconds": first_time[succeeded].mean().item() if succeeded.any() else None,
             "final_upright_fraction": (env.scene["robot"].data.projected_gravity_b[:, 2] < -0.95).float().mean().item(),
+            "final_4s_prone_fraction": torch.stack(final_pose).float().mean().item(),
+            "final_4s_joint_rms_speed_rad_s": torch.stack(final_speed).mean().item(),
+            "final_4s_target_rms_rate_rad_s": torch.stack(final_target_rate).mean().item(),
         }
         print("EVALUATION", mode, result[mode], flush=True)
 Path(args.output).write_text(json.dumps(result, indent=2) + "\n")

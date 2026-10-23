@@ -202,6 +202,30 @@ def _randomize_prop_by_op(
     return data
 
 
+def set_soft_joint_position_limits(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    lower: float,
+    upper: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Set explicit soft bounds after import without changing PhysX hard limits."""
+    asset = env.scene[asset_cfg.name]
+    ids = slice(None) if env_ids is None else env_ids
+    joints = asset_cfg.joint_ids
+    hard = asset.data.joint_pos_limits[ids][:, joints]
+    if lower >= upper or (hard[..., 0] > lower).any() or (hard[..., 1] < upper).any():
+        raise ValueError(f"Soft bounds [{lower}, {upper}] must lie inside the physical joint limits")
+    # Avoid chained advanced indexing, which would write into a copy.
+    if env_ids is None:
+        asset.data.soft_joint_pos_limits[:, joints, 0] = lower
+        asset.data.soft_joint_pos_limits[:, joints, 1] = upper
+    else:
+        joint_ids = torch.arange(asset.num_joints, device=asset.device)[joints]
+        asset.data.soft_joint_pos_limits[env_ids[:, None], joint_ids[None, :], 0] = lower
+        asset.data.soft_joint_pos_limits[env_ids[:, None], joint_ids[None, :], 1] = upper
+
+
 def reset_root_state_uniform(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,

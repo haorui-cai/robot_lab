@@ -33,6 +33,17 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.standard_walk_env_cfg:TQBot2StandardWalkRoughEnvCfg",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:TQBot2RoughPPORunnerCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:TQBot2StandardWalkPPORunnerCfg",
+    },
+)
+
+
+gym.register(
+    id="RobotLab-Isaac-Climb-BlindBox-TQBot2-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.blind_box_env_cfg:TQBot2BlindBoxEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.blind_box_ppo_cfg:TQBot2BlindBoxPPORunnerCfg",
     },
 )

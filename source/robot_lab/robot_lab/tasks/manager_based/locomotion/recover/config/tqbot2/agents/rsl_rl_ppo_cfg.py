@@ -12,7 +12,7 @@ class RecoverDistributionCfg(RslRlMLPModelCfg.DistributionCfg):
         "robot_lab.tasks.manager_based.locomotion.recover.config.tqbot2.agents.distribution:BoundedGaussianDistribution"
     )
     init_std = 0.35
-    min_std = 0.03
+    min_std = 0.003
     max_std = 0.6
 
 

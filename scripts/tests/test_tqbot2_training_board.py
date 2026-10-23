@@ -20,10 +20,101 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 APP = Path(__file__).resolve().parents[1] / "tools/TQBot2_tensorboard_zh"
 sys.path.insert(0, str(APP))
-from server import Repository, create_handler
+from server import Repository, create_handler, descriptor
+from runs import continuation, describe
 
 
 class TrainingBoardTests(unittest.TestCase):
+    def test_completed_resume_keeps_absolute_range_and_segment_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run = root / "logs/rsl_rl/tqbot2_standard_walk/2026-10-16_15-09-42_rewardv4_fixture"
+            (run / "params").mkdir(parents=True)
+            (run / "params/agent.yaml").write_text("resume: true\nmax_iterations: 4499\n")
+            events = run / "events.out.tfevents.fixture"
+            events.touch()
+            checkpoint = run / "model_11999.pt"
+            checkpoint.touch()
+            source = root / "logs/rsl_rl/tqbot2_standard_walk/previous/model_7500.pt"
+            (source.parent / "params").mkdir(parents=True)
+            (source.parent / "params/env.yaml").write_text("rewards:\n  joint_pos_penalty:\n    weight: -0.01\n")
+            output = root / "outputs/fixture"
+            output.mkdir(parents=True)
+            (output / "training_completed.json").write_text(json.dumps({"status": "completed",
+                "iterations_requested": 4499, "iterations_completed": 4499,
+                "last_iteration_index": 11999, "checkpoint": str(checkpoint)}))
+            meta = {"experiment": "scratch", "source_checkpoint": str(source), "first_iteration": 7501,
+                    "final_iteration": 11999, "iterations": 4499, "additional_iterations": 4499,
+                    "target_phase_iteration": 12000, "reward_changes": {"joint_pos_penalty_weight": -0.2}}
+            row = describe(root, run, [events], meta, output / "launch_metadata.json")
+            self.assertEqual((row["status"], row["iteration"], row["target"]), ("completed", 11999, 12000))
+            self.assertEqual(row["title"], "行走 v4 · 从零组")
+            self.assertEqual(row["continuation"]["first_iteration"], 7501)
+            self.assertEqual(row["continuation"]["final_iteration"], 11999)
+            self.assertEqual(row["continuation"]["segment_completed"], 4499)
+            self.assertEqual(row["continuation"]["segment_iterations"], 4499)
+            self.assertEqual(row["continuation"]["source_checkpoint"], "model_7500.pt")
+            self.assertIn("-0.01 → -0.2", row["continuation"]["focus"][0]["zh"])
+
+    def test_stopped_resume_and_missing_origin_do_not_imply_zero_start(self):
+        phase = continuation({"first_iteration": 5301, "final_iteration": 11999,
+                              "additional_iterations": 6699, "target_phase_iteration": 12000},
+                             {}, {}, 7515, "resume")
+        self.assertEqual(phase["segment_completed"], 2215)
+        self.assertEqual(phase["total_iterations"], 12000)
+        self.assertEqual(phase["segment_iterations"], 6699)
+        unknown = continuation({}, {"max_iterations": "3000"}, {}, None, "resume")
+        self.assertIsNone(unknown["first_iteration"])
+        self.assertIsNone(unknown["final_iteration"])
+        self.assertIsNone(unknown["segment_completed"])
+        cursor = continuation({"resume_cursor": 10201, "expected_iteration_range": [10201, 14999],
+                               "additional_iterations": 4799}, {}, {}, 14999, "resume")
+        self.assertEqual(cursor["segment_completed"], 4799)
+        self.assertEqual(cursor["total_iterations"], 15000)
+        cumulative_event = continuation({"resume_cursor": 10201, "target_phase_iteration": 15000,
+                                         "additional_iterations": 4799}, {},
+                                        {"status": "completed", "iterations_completed": 15000,
+                                         "iterations_requested": 15000}, 14999, "resume")
+        self.assertEqual(cumulative_event["segment_completed"], 4799)
+
+    def test_generic_discovery_saved_configuration_and_completion_count(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run = root / "logs/rsl_rl/future_experiment/2026-10-14_01-00-00_fixture"
+            run.mkdir(parents=True)
+            writer = EventFileWriter(str(run))
+            writer.add_event(Event(step=2999, wall_time=1000,
+                summary=Summary(value=[Summary.Value(tag="Curriculum/terrain_breakdown/boxes/mean", simple_value=4.)])))
+            writer.close()
+            (run / "params").mkdir()
+            (run / "params/agent.yaml").write_text("resume: false\nmax_iterations: 3000\nalgorithm:\n  learning_rate: 0.001\n  schedule: adaptive\n  entropy_coef: 0.01\nactor:\n  obs_normalization: false\ncritic:\n  obs_normalization: false\n")
+            (run / "params/env.yaml").write_text("foot_link_name: '.*_foot'\nscene:\n  num_envs: 4096\n  robot:\n    actuators:\n      calf:\n        effort_limit: 30.2175\n  terrain:\n    terrain_generator: null\nevents:\n  randomize_foot_material: null\n")
+            output = root / "outputs/fixture"
+            output.mkdir(parents=True)
+            (output / "launch_metadata.json").write_text(json.dumps({"run_directory": str(run), "iterations": 3000}))
+            checkpoint = run / "model_2999.pt"
+            checkpoint.write_bytes(b"fixture")
+            (output / "training_completed.json").write_text(json.dumps({"status": "completed", "iterations_completed": 3000,
+                "iterations_requested": 3000, "last_iteration_index": 2999, "checkpoint": str(checkpoint)}))
+            repository = Repository(root)
+            row = repository.scan()[0]
+            self.assertEqual(row["status"], "completed")
+            self.assertEqual(row["completed_iterations"], 3000)
+            self.assertEqual(row["iteration"], 2999)
+            self.assertEqual(row["profile"]["torque_limits"]["calf"], 30.2175)
+            self.assertIs(row["profile"]["actor_normalization"], False)
+            self.assertEqual(row["profile"]["terrain_types"], [])
+            data = repository.scalars([row["id"]], "terrain", "")
+            self.assertEqual(data["metrics"][0]["name"], "随机方块 · 平均课程等级")
+
+    def test_terrain_translation_and_statistic_boundaries(self):
+        for stat in ("mean", "max", "env_count", "move_up_rate", "move_down_rate", "top_completed_rate", "level_9_fraction"):
+            metric = descriptor(f"Curriculum/terrain_breakdown/hf_pyramid_slope/{stat}")
+            self.assertIn("凸形坡面", metric["name"])
+            self.assertIn("Pyramid slope", metric["name_en"])
+            self.assertEqual(metric["direction"], "neutral")
+        self.assertNotIn("未记录", descriptor("Curriculum/terrain_levels")["hint"])
+
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory()

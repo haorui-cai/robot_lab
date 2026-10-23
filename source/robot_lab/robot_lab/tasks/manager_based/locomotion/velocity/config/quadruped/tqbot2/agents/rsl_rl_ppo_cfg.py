@@ -11,6 +11,8 @@ class TQBot2RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "tqbot2_rough"
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
+        actor_obs_normalization=False,
+        critic_obs_normalization=False,
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
         activation="elu",
@@ -38,3 +40,12 @@ class TQBot2FlatPPORunnerCfg(TQBot2RoughPPORunnerCfg):
 
         self.max_iterations = 5000
         self.experiment_name = "tqbot2_flat"
+
+
+@configclass
+class TQBot2StandardWalkPPORunnerCfg(TQBot2RoughPPORunnerCfg):
+    """Fresh StandardWalk runs use current defaults and a separate log namespace."""
+
+    experiment_name = "tqbot2_standard_walk"
+    max_iterations = 12000
+    resume = False
