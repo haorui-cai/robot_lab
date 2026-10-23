@@ -1,0 +1,862 @@
+{
+  "source_commit": "a33986edd674b64e69ca7b36bc5344dc3d11680a",
+  "private_model_pin": "7843022e8c9b58cd1fb4373090366022302a7cd6",
+  "rewards": {
+    "lin_vel_z_l2": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:lin_vel_z_l2",
+      "params": {},
+      "weight": "-2.0"
+    },
+    "ang_vel_xy_l2": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:ang_vel_xy_l2",
+      "params": {},
+      "weight": "-0.05"
+    },
+    "joint_torques_l2": {
+      "func": "isaaclab.envs.mdp.rewards:joint_torques_l2",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-2.5e-05"
+    },
+    "joint_acc_l2": {
+      "func": "isaaclab.envs.mdp.rewards:joint_acc_l2",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-2.5e-07"
+    },
+    "joint_pos_limits": {
+      "func": "isaaclab.envs.mdp.rewards:joint_pos_limits",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-5.0"
+    },
+    "joint_power": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:joint_power",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-2.0e-05"
+    },
+    "stand_still": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:stand_still",
+      "params": {
+        "command_name": "base_velocity",
+        "command_threshold": "0.1",
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-2.0"
+    },
+    "joint_pos_penalty": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.swing_posture:SwingJointPositionPenalty",
+      "params": {
+        "command_name": "base_velocity",
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": ".*",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "stand_still_scale": "5.0",
+        "velocity_threshold": "0.5",
+        "command_threshold": "0.1",
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "foot_joint_names": {
+          "FR_foot": [
+            "FR_hip_joint",
+            "FR_thigh_joint",
+            "FR_calf_joint"
+          ],
+          "FL_foot": [
+            "FL_hip_joint",
+            "FL_thigh_joint",
+            "FL_calf_joint"
+          ],
+          "RR_foot": [
+            "RR_hip_joint",
+            "RR_thigh_joint",
+            "RR_calf_joint"
+          ],
+          "RL_foot": [
+            "RL_hip_joint",
+            "RL_thigh_joint",
+            "RL_calf_joint"
+          ]
+        },
+        "swing_scale": "0.0"
+      },
+      "weight": "-0.2"
+    },
+    "joint_mirror": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:FootDisplacementSymmetry",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "foot_pairs": [
+          [
+            "FR_foot",
+            "RL_foot"
+          ],
+          [
+            "FL_foot",
+            "RR_foot"
+          ]
+        ],
+        "calibration_perturbation_rad": "0.05",
+        "calibration_samples": "8192",
+        "calibration_seed": "42"
+      },
+      "weight": "-0.05"
+    },
+    "action_rate_l2": {
+      "func": "isaaclab.envs.mdp.rewards:action_rate_l2",
+      "params": {},
+      "weight": "-0.01"
+    },
+    "undesired_contacts": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:undesired_contacts",
+      "params": {
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            "^(?!.*_(?:foot|calf|thigh)$).*"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "threshold": "1.0"
+      },
+      "weight": "-1.0"
+    },
+    "contact_forces": {
+      "func": "isaaclab.envs.mdp.rewards:contact_forces",
+      "params": {
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "threshold": "100.0"
+      },
+      "weight": "-0.00015"
+    },
+    "track_lin_vel_xy_exp": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:track_lin_vel_xy_exp",
+      "params": {
+        "command_name": "base_velocity",
+        "std": "0.5"
+      },
+      "weight": "3.0"
+    },
+    "track_ang_vel_z_exp": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:track_ang_vel_z_exp",
+      "params": {
+        "command_name": "base_velocity",
+        "std": "0.5"
+      },
+      "weight": "1.5"
+    },
+    "feet_air_time_variance": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:feet_air_time_variance_penalty",
+      "params": {
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-1.0"
+    },
+    "feet_gait": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.normalized_gait:PeriodNormalizedGaitReward",
+      "params": {
+        "command_name": "base_velocity",
+        "velocity_threshold": "0.5",
+        "command_threshold": "0.1",
+        "synced_feet_pair_names": [
+          [
+            "FL_foot",
+            "RR_foot"
+          ],
+          [
+            "FR_foot",
+            "RL_foot"
+          ]
+        ],
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "phase_error_scale": "0.7071067811865476",
+        "max_phase_error": "0.2",
+        "period_range": [
+          "0.08",
+          "2.0"
+        ],
+        "stale_periods": "2.0"
+      },
+      "weight": "0.5"
+    },
+    "feet_contact_without_cmd": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:feet_contact_without_cmd",
+      "params": {
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "command_name": "base_velocity"
+      },
+      "weight": "0.1"
+    },
+    "feet_slide": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.foot_ground:SupportFootSlip",
+      "params": {
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "foot_radius": "0.012"
+      },
+      "weight": "-0.1"
+    },
+    "upward": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.rewards:upward",
+      "params": {},
+      "weight": "1.0"
+    },
+    "feet_frequency": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.normalized_gait:FootCadenceReward",
+      "params": {
+        "target_frequency": "2.0",
+        "frequency_scale": "0.5",
+        "command_name": "base_velocity",
+        "command_threshold": "0.1",
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "period_range": [
+          "0.08",
+          "2.0"
+        ],
+        "stale_periods": "2.0"
+      },
+      "weight": "0.2"
+    },
+    "feet_ground_clearance": {
+      "func": "robot_lab.tasks.manager_based.locomotion.velocity.mdp.foot_ground:SwingFootClearance",
+      "params": {
+        "command_name": "base_velocity",
+        "target_clearance": "0.05",
+        "error_scale": "0.05",
+        "tanh_mult": "2.0",
+        "foot_radius": "0.012",
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "sensor_cfg": {
+          "name": "contact_forces",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": [
+            ".*_foot"
+          ],
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        }
+      },
+      "weight": "-0.5"
+    }
+  },
+  "sim_dt": "0.005",
+  "decimation": "4",
+  "terminations": {
+    "time_out": {
+      "func": "isaaclab.envs.mdp.terminations:time_out",
+      "params": {},
+      "time_out": "true"
+    },
+    "terrain_out_of_bounds": {
+      "func": "isaaclab_tasks.manager_based.locomotion.velocity.mdp.terminations:terrain_out_of_bounds",
+      "params": {
+        "asset_cfg": {
+          "name": "robot",
+          "joint_names": "null",
+          "joint_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "fixed_tendon_names": "null",
+          "fixed_tendon_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "body_names": "null",
+          "body_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "object_collection_names": "null",
+          "object_collection_ids": [
+            "null",
+            "null",
+            "null"
+          ],
+          "preserve_order": "false"
+        },
+        "distance_buffer": "3.0"
+      },
+      "time_out": "true"
+    },
+    "illegal_contact": "null"
+  },
+  "commands": {
+    "ranges": {
+      "lin_vel_x": [
+        "-1.0",
+        "1.0"
+      ],
+      "lin_vel_y": [
+        "-1.0",
+        "1.0"
+      ],
+      "ang_vel_z": [
+        "-1.0",
+        "1.0"
+      ],
+      "heading": [
+        "-3.141592653589793",
+        "3.141592653589793"
+      ]
+    },
+    "resampling_time_range": [
+      "10.0",
+      "10.0"
+    ]
+  },
+  "note": "Public config/function parameters and opaque model pin; no robot asset bytes or absolute local paths"
+}

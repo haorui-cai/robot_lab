@@ -1,0 +1,16 @@
+# Observed runtime for the V4 controls; no robot assets or credentials.
+# Install the pinned IsaacLab checkout separately as described in the guide.
+rsl-rl-lib==5.0.1
+torch==2.7.0
+torchvision==0.22.0
+torchaudio==2.7.0
+numpy==1.26.0
+gymnasium==1.2.1
+scipy==1.15.3
+warp-lang==1.13.0
+isaacsim==5.1.0.0
+PyYAML==6.0.2
+xacrodoc==2.0.1
+toml==0.10.2
+trimesh==4.5.1
+tensorboard==2.20.0
